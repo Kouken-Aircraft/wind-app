@@ -10,24 +10,19 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v17.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v18.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
 REFRESH_RATE = 2
-PAD_X = 50
+PAD_X = 60 # 【変更】左側の文字用に余白を少し広げました
 PAD_Y = 80
 
-# 風レベル定義 (色分けを強化)
+# 風レベル定義
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "CALM"},
-    
-    # 【変更】微風は「水色」にして、弱風と区別
     "微風": {"val": 2.0, "color": "#00BCD4",   "label": "LIGHT"}, # Cyan
-    
-    # 【変更】弱風は「濃い青」
     "弱風": {"val": 4.5, "color": "#2962FF",   "label": "WEAK"},  # Dark Blue
-    
     "中風": {"val": 7.0, "color": "#FFC107",   "label": "MID"},   # Yellow
     "強風": {"val": 10.0, "color": "#FF5252",  "label": "HIGH"}   # Red
 }
@@ -89,10 +84,13 @@ def draw_map(data, max_dist):
         runway = plt.Rectangle((30, 0), 40, max_dist, color='#555555', alpha=0.9)
         ax.add_patch(runway)
         ax.plot([50, 50], [0, max_dist], color='white', linestyle='--', linewidth=2)
+        
         step = 100 if max_dist > 300 else 50
         for d in range(0, max_dist + 1, step):
-            ax.text(20, d, f"{d}m", color='black', fontsize=9, ha='right', va='center',
-                    bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
+            # 【変更点】表示位置を x=20 から x=-25 (滑走路の外) に移動
+            # これで矢印と被らなくなります
+            ax.text(-25, d, f"{d}m", color='black', fontsize=10, ha='right', va='center',
+                    bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=1))
 
     for dist_key, item in data.items():
         try:
@@ -113,9 +111,7 @@ def draw_map(data, max_dist):
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
                 
-                # 【変更】矢印の長さの計算式 (差をつけるため係数を大きく変更)
                 base_scale = 20.0 if max_dist <= 600 else 30.0
-                # 風速値そのものを少し上げているので、倍率は *7.0 くらいで十分差が出る
                 arrow_len = base_scale + (speed_val * 7.0)
                 
                 U = np.cos(arrow_angle_rad) * arrow_len
@@ -123,6 +119,7 @@ def draw_map(data, max_dist):
                 ax.quiver(x, y, U, V, color=arrow_color, angles='xy', scale_units='xy', scale=1,
                           width=0.025, headwidth=4, edgecolor='white', linewidth=1.5, zorder=4)
                 
+                # ラベルも少し離す
                 ax.text(x + 20, y, label_text, color='black', fontsize=12, fontweight='bold',
                         bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3', edgecolor='none'), zorder=5)
             else:
@@ -136,7 +133,7 @@ def draw_map(data, max_dist):
 # ==========================================
 # 🚀 メイン処理
 # ==========================================
-st.set_page_config(page_title="Wind Monitor V17", layout="centered")
+st.set_page_config(page_title="Wind Monitor V18", layout="centered")
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
@@ -153,7 +150,7 @@ if mode == "Pilot (Map Monitor)":
     st.caption(f"Update: {time.strftime('%H:%M:%S')}")
     time.sleep(REFRESH_RATE)
     st.rerun()
-    st.stop() # ここで止める
+    st.stop()
 
 # ----------------------------------------------------
 # 🚩 GROUND CREW MODE
