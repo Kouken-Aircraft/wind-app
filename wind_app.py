@@ -10,7 +10,7 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v16.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v17.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -18,12 +18,18 @@ REFRESH_RATE = 2
 PAD_X = 50
 PAD_Y = 80
 
+# 風レベル定義 (色分けを強化)
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "CALM"},
-    "微風": {"val": 2.0, "color": "#2196F3",   "label": "LIGHT"}, 
-    "弱風": {"val": 4.0, "color": "#2196F3",   "label": "WEAK"},  
-    "中風": {"val": 6.0, "color": "#FFC107",   "label": "MID"},   
-    "強風": {"val": 9.0, "color": "#FF5252",   "label": "HIGH"}   
+    
+    # 【変更】微風は「水色」にして、弱風と区別
+    "微風": {"val": 2.0, "color": "#00BCD4",   "label": "LIGHT"}, # Cyan
+    
+    # 【変更】弱風は「濃い青」
+    "弱風": {"val": 4.5, "color": "#2962FF",   "label": "WEAK"},  # Dark Blue
+    
+    "中風": {"val": 7.0, "color": "#FFC107",   "label": "MID"},   # Yellow
+    "強風": {"val": 10.0, "color": "#FF5252",  "label": "HIGH"}   # Red
 }
 
 # ==========================================
@@ -93,6 +99,7 @@ def draw_map(data, max_dist):
             dist_m = int(dist_key)
             clock = item['clock']
             level_name = item.get('level', "無風")
+            
             level_info = WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])
             speed_val = level_info["val"]
             arrow_color = level_info["color"]
@@ -105,12 +112,17 @@ def draw_map(data, max_dist):
             if level_name != "無風" and speed_val > 0:
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
-                base_scale = 25.0 if max_dist <= 600 else 40.0
-                arrow_len = base_scale + (speed_val * 6.0)
+                
+                # 【変更】矢印の長さの計算式 (差をつけるため係数を大きく変更)
+                base_scale = 20.0 if max_dist <= 600 else 30.0
+                # 風速値そのものを少し上げているので、倍率は *7.0 くらいで十分差が出る
+                arrow_len = base_scale + (speed_val * 7.0)
+                
                 U = np.cos(arrow_angle_rad) * arrow_len
                 V = np.sin(arrow_angle_rad) * arrow_len
                 ax.quiver(x, y, U, V, color=arrow_color, angles='xy', scale_units='xy', scale=1,
                           width=0.025, headwidth=4, edgecolor='white', linewidth=1.5, zorder=4)
+                
                 ax.text(x + 20, y, label_text, color='black', fontsize=12, fontweight='bold',
                         bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3', edgecolor='none'), zorder=5)
             else:
@@ -122,42 +134,33 @@ def draw_map(data, max_dist):
     return fig
 
 # ==========================================
-# 🚀 メイン処理 (ここが分岐点)
+# 🚀 メイン処理
 # ==========================================
-st.set_page_config(page_title="Wind Monitor V16", layout="centered")
+st.set_page_config(page_title="Wind Monitor V17", layout="centered")
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
-# モード選択
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
 # ----------------------------------------------------
-# ✈️ PILOT MODE (ここで完全に止める)
+# ✈️ PILOT MODE
 # ----------------------------------------------------
 if mode == "Pilot (Map Monitor)":
     st.markdown(f"### ✈️ Wind Map ({MAX_DISTANCE}m)")
-    
-    # 地図だけを描画
     all_data = load_all_data()
     fig = draw_map(all_data, MAX_DISTANCE)
     st.pyplot(fig, use_container_width=True)
     st.caption(f"Update: {time.strftime('%H:%M:%S')}")
-    
-    # 自動更新
     time.sleep(REFRESH_RATE)
     st.rerun()
-    
-    # 【重要】ここでプログラムを強制終了させる
-    # これより下のコード（入力ボタンなど）は絶対に読み込まれません
-    st.stop()
+    st.stop() # ここで止める
 
 # ----------------------------------------------------
-# 🚩 GROUND CREW MODE (ここから下が入力画面)
+# 🚩 GROUND CREW MODE
 # ----------------------------------------------------
 elif mode == "Ground Crew (Input)":
     st.markdown("## 🚩 Input Data")
     
-    # URLから位置を復元
     default_dist = 0
     if "dist" in st.query_params:
         try: default_dist = int(st.query_params["dist"])
