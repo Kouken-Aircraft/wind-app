@@ -67,59 +67,84 @@ def save_location_data(location, direction, speed):
 # 🎨 MAP DRAWING FUNCTION
 # ==========================================
 def draw_map(data):
-    # Figure size (5x8 inches)
+    # Figure size (スマホで見やすい縦横比)
     fig, ax = plt.subplots(figsize=(5, 8))
     
-    # --- Draw Background ---
+    # --- Draw Background (背景) ---
     bg_path = os.path.join(BASE_DIR, BG_IMAGE_FILE)
     if os.path.exists(bg_path):
-        # Use image if available
         img = mpimg.imread(bg_path)
         ax.imshow(img, extent=[0, 100, 0, 400])
     else:
-        # Draw default runway (Green background)
+        # Default Green Runway
         ax.set_xlim(0, 100)
         ax.set_ylim(0, 400)
-        ax.set_facecolor('#4CAF50') # Grass Green
+        ax.set_facecolor('#8BC34A') # 明るめの緑に変更
         
         # Asphalt
-        runway = plt.Rectangle((30, 0), 40, 400, color='gray', alpha=0.8)
+        runway = plt.Rectangle((30, 0), 40, 400, color='#555555', alpha=0.9)
         ax.add_patch(runway)
         
         # Center Line
-        ax.plot([50, 50], [0, 400], color='white', linestyle='--', linewidth=2)
-        ax.text(50, 380, "RUNWAY", color='white', ha='center', fontweight='bold')
+        ax.plot([50, 50], [0, 400], color='white', linestyle='--', linewidth=3)
+        ax.text(50, 380, "RUNWAY", color='white', ha='center', fontweight='bold', fontsize=15)
 
-    # --- Draw Wind Vectors ---
+    # --- Draw Wind Vectors (矢印) ---
     for loc_name, coords in LOCATION_COORDS.items():
         if loc_name in data:
             item = data[loc_name]
             speed = item['speed']
             direction_str = item['dir']
             
-            # Draw arrow only if wind exists
+            # 計測地点に黒い点を打つ (アンカー)
+            ax.plot(coords[0], coords[1], 'o', color='black', markersize=8, zorder=3)
+            
             if speed > 0:
-                angle_deg = DIR_TO_ANGLE.get(direction_str, 90)
+                # 風向きの計算 (北風は「南に向かうベクトル」なので -90度)
+                # Mathematical: 0=East, 90=North. 
+                # Wind "FROM North" blows "TO South" (-90 deg).
+                wind_angle_map = {
+                    "N": -90, "NE": -135, "E": 180, "SE": 135,
+                    "S": 90,  "SW": 45,   "W": 0,   "NW": -45
+                }
+                
+                angle_deg = wind_angle_map.get(direction_str, -90)
                 angle_rad = np.radians(angle_deg)
                 
-                # Vector Components
-                scale = 2.0
-                U = speed * np.cos(angle_rad) * scale
-                V = speed * np.sin(angle_rad) * scale
+                # 色の決定 (信号機カラー)
+                arrow_color = '#2196F3' # Blue (Safe)
+                if speed >= 3.0: arrow_color = '#FFC107' # Yellow (Caution)
+                if speed >= 5.0: arrow_color = '#FF5252' # Red (Danger)
+
+                # ベクトル成分
+                # 矢印の長さはある程度一定にして見やすく、太さで強調する
+                scale = 15.0 
+                U = np.cos(angle_rad) * scale
+                V = np.sin(angle_rad) * scale
                 
-                # Draw Arrow
+                # 矢印を描画 (quiverのパラメータを調整して太くする)
                 ax.quiver(coords[0], coords[1], U, V, 
-                          color='red', scale=1, scale_units='xy', 
-                          angles='xy', width=0.015, headwidth=4)
+                          color=arrow_color, 
+                          angles='xy', scale_units='xy', scale=1,
+                          width=0.025,       # 太さ (以前は0.015)
+                          headwidth=5,       # 頭の横幅
+                          headlength=4,      # 頭の長さ
+                          headaxislength=3.5, 
+                          edgecolor='white', # 矢印に白いフチをつける
+                          linewidth=1.5,
+                          zorder=4)          # 最前面に表示
                 
-                # Wind Speed Label
-                ax.text(coords[0] + 10, coords[1], f"{speed}m", 
-                        color='black', fontsize=12, fontweight='bold', 
-                        bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+                # 風速のラベル (白いボックス付きで見やすく)
+                ax.text(coords[0] + 15, coords[1], f"{speed}m", 
+                        color='black', fontsize=14, fontweight='bold', 
+                        bbox=dict(facecolor='white', alpha=0.8, edgecolor='black', boxstyle='round,pad=0.3'),
+                        zorder=5)
             
-            # Location Label
-            ax.text(coords[0] - 25, coords[1], loc_name, 
-                    color='blue', fontsize=9, ha='right')
+            # 地点名ラベル
+            ax.text(coords[0] - 10, coords[1], loc_name, 
+                    color='white', fontsize=10, ha='right', fontweight='bold',
+                    bbox=dict(facecolor='black', alpha=0.5, edgecolor='none', pad=0.2),
+                    zorder=5)
 
     ax.axis('off')
     return fig
@@ -195,3 +220,4 @@ else:
             if st.button(str(p), key=f"p_{i}", use_container_width=True):
                 save_location_data(selected_loc, target_data['dir'], p)
                 st.rerun()
+
