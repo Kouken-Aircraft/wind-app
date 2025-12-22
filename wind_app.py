@@ -4,137 +4,146 @@ import os
 import time
 
 # ==========================================
-# ⚙️ 設定・ファイルパスの固定（ここが重要）
+# ⚙️ 設定・ファイルパス
 # ==========================================
-# この wind_app.py がある場所を基準にする
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v2.json") # ファイル名を変更
+REFRESH_RATE = 3 # 更新頻度（秒）
 
-# パイロット画面の更新頻度（秒）
-REFRESH_RATE = 2
+# 📍 計測地点のリスト（ここを自由に増減してください）
+LOCATIONS = [
+    "① スタート地点",
+    "② 200m地点",
+    "③ 400m地点",
+    "④ 600m地点",
+    "⑤ ゴール付近"
+]
+DIRECTIONS = ["北", "北東", "東", "南東", "南", "南西", "西", "北西"]
 
 # ==========================================
-# 💾 データの読み書き関数
+# 💾 データの読み書き関数（多地点対応版）
 # ==========================================
-def load_data():
-    # ファイルがない場合は初期値を作成して返す
+def load_all_data():
+    """全地点のデータをまとめて読み込む"""
+    # ファイルがなければ、全地点の初期値を作成
     if not os.path.exists(DATA_FILE):
-        default_data = {"dir": "北", "speed": 0.0}
-        save_data("北", 0.0) # ファイルを生成しておく
-        return default_data
+        initial_data = {}
+        for loc in LOCATIONS:
+            initial_data[loc] = {"dir": "北", "speed": 0.0}
+        # ファイルを生成しておく（初回のみ）
+        try:
+            with open(DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump(initial_data, f, ensure_ascii=False, indent=2)
+        except: pass
+        return initial_data
     
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError):
-        # 読み込みに失敗したら初期値を返す（アプリを落とさないため）
-        return {"dir": "北", "speed": 0.0}
+    except:
+        # エラー時は空の初期値を返す（アプリを落とさない）
+        return {loc: {"dir": "北", "speed": 0.0} for loc in LOCATIONS}
 
-def save_data(direction, speed):
-    data = {"dir": direction, "speed": speed}
+def save_location_data(location, direction, speed):
+    """特定の地点のデータだけを更新して保存する"""
+    # まず現在の全データを読み込む
+    current_all_data = load_all_data()
+    
+    # 指定された地点のデータを上書き
+    current_all_data[location] = {"dir": direction, "speed": speed}
+    
+    # 全データをファイルに書き戻す
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f)
+            json.dump(current_all_data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         st.error(f"保存エラー: {e}")
 
 # ==========================================
 # 📱 アプリのメイン処理
 # ==========================================
-st.set_page_config(page_title="鳥人間 風況モニター", layout="centered")
+st.set_page_config(page_title="鳥人間 風況マップ Ver.2", layout="centered")
 
 # サイドバーでモード切替
-mode = st.sidebar.radio("モード選択", ["コントローラー (地上クルー)", "モニター (パイロット)"])
+mode = st.sidebar.radio("モード選択", ["コントローラー (地上クルー)", "モニター (全体表示)"])
 
-# 常に最新データを読み込む
-current_data = load_data()
+# 常に最新の全データを読み込んでおく
+all_data = load_all_data()
 
 # ------------------------------------------
-# ✈️ パイロット用モニター画面
+# 🗺️ モニター (全体表示) - 今は暫定的に表で表示
 # ------------------------------------------
-if mode == "モニター (パイロット)":
-    st.markdown("## ✈️ パイロット用モニター")
+if mode == "モニター (全体表示)":
+    st.markdown("## 🗺️ 全地点の風況一覧")
+    st.info("（ステップ2でここに地図と矢印が表示されます）")
     
-    # 視認性重視のデザイン (HTML/CSS埋め込み)
-    st.markdown(
-        f"""
-        <div style="text-align: center; border: 4px solid #2196F3; padding: 20px; border-radius: 15px; background-color: #0e1117;">
-            <p style="font-size: 20px; color: #ccc; margin: 0;">WIND DIR (風向)</p>
-            <h1 style="font-size: 80px; margin: 0; color: #FFeb3b; font-weight: bold;">{current_data['dir']}</h1>
-            <hr style="border-color: #444; margin: 20px 0;">
-            <p style="font-size: 20px; color: #ccc; margin: 0;">WIND SPEED (風速)</p>
-            <h1 style="font-size: 100px; margin: 0; color: #fff; font-weight: bold;">{current_data['speed']:.1f} <span style="font-size:40px">m/s</span></h1>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # データをみやすい表形式に変換して表示
+    display_data = []
+    for loc in LOCATIONS:
+        # もしデータ定義後に地点が増えてもエラーにならないようgetを使う
+        loc_data = all_data.get(loc, {"dir": "-", "speed": 0.0})
+        display_data.append({
+            "計測地点": loc,
+            "風向": loc_data["dir"],
+            "風速 (m/s)": f"{loc_data['speed']:.1f}"
+        })
+    st.table(display_data)
     
-    st.caption(f"最終更新: {time.strftime('%H:%M:%S')}")
-    
-    # 自動更新ロジック (2秒待ってから再実行)
+    st.caption(f"最終更新: {time.strftime('%H:%M:%S')} / {REFRESH_RATE}秒ごとに自動更新")
+    # 自動更新ロジック
     time.sleep(REFRESH_RATE)
     st.rerun()
 
 # ------------------------------------------
-# 🚩 地上クルー用コントローラー画面
+# 🚩 コントローラー (地上クルー) - 地点選択式
 # ------------------------------------------
 else:
-    st.markdown("## 🚩 風況入力")
-    st.info("ボタンを押すと即座にパイロット画面へ反映されます")
-
-    # 現在値の確認用表示
-    st.markdown(f"**現在の送信データ:** {current_data['dir']} / {current_data['speed']} m/s")
-
+    st.markdown("## 🚩 データ入力")
+    
+    # 【重要】まず「どこにいるか」を選んでもらう
+    selected_loc = st.selectbox("📍 あなたの場所を選択してください", LOCATIONS)
+    
     st.write("---")
+    st.markdown(f"### {selected_loc} の情報を入力中")
     
+    # 選択された場所の現在のデータを取得（なければ初期値）
+    target_data = all_data.get(selected_loc, {"dir": "北", "speed": 0.0})
+    st.info(f"現在の値: 【 {target_data['dir']} / {target_data['speed']} m/s 】")
+
     # === ① 風向入力 ===
-    st.subheader("① 風向")
-    col1, col2, col3, col4 = st.columns(4)
-    directions = ["北", "北東", "東", "南東", "南", "南西", "西", "北西"]
-    
-    for i, d in enumerate(directions):
-        # 4つずつ列を割り振る
-        if i < 4: col = [col1, col2, col3, col4][i]
-        else: col = [col1, col2, col3, col4][i-4]
-        
+    st.write("風向を選択")
+    c1, c2, c3, c4 = st.columns(4)
+    for i, d in enumerate(DIRECTIONS):
+        col = [c1, c2, c3, c4][i % 4]
         with col:
-            # 現在選択されている風向を目立たせる（primary色にする）
-            btn_type = "primary" if current_data['dir'] == d else "secondary"
-            
-            if st.button(d, key=f"dir_{i}", type=btn_type, use_container_width=True):
-                save_data(d, current_data['speed'])
+            # 選択中の風向を目立たせる
+            btn_type = "primary" if target_data['dir'] == d else "secondary"
+            if st.button(d, key=f"d_{i}", type=btn_type, use_container_width=True):
+                # 選択された場所を指定して保存
+                save_location_data(selected_loc, d, target_data['speed'])
                 st.rerun()
 
-    st.write("---")
-
     # === ② 風速入力 ===
-    st.subheader("② 風速 (m/s)")
-    
-    # 増減ボタン
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c1:
-        if st.button("➖ 0.5減らす", use_container_width=True):
-            new_speed = max(0.0, current_data['speed'] - 0.5)
-            save_data(current_data['dir'], new_speed)
+    st.write("風速を変更 (m/s)")
+    sc1, sc2, sc3 = st.columns([1, 2, 1])
+    with sc1:
+        if st.button("➖ 0.5", use_container_width=True):
+            new_speed = max(0.0, target_data['speed'] - 0.5)
+            save_location_data(selected_loc, target_data['dir'], new_speed)
             st.rerun()
-    with c3:
-        if st.button("➕ 0.5増やす", use_container_width=True):
-            new_speed = current_data['speed'] + 0.5
-            save_data(current_data['dir'], new_speed)
+    with sc2:
+        st.markdown(f"<h2 style='text-align: center; margin: 0;'>{target_data['speed']:.1f}</h2>", unsafe_allow_html=True)
+    with sc3:
+        if st.button("➕ 0.5", use_container_width=True):
+            new_speed = target_data['speed'] + 0.5
+            save_location_data(selected_loc, target_data['dir'], new_speed)
             st.rerun()
-    
-    # 中央に大きく表示
-    with c2:
-        st.markdown(f"<h2 style='text-align: center; margin: 0;'>{current_data['speed']:.1f} m/s</h2>", unsafe_allow_html=True)
-
-    # プリセットボタン（よくある数字を一発入力）
+            
+    # プリセット
     st.write("一発入力")
-    sc1, sc2, sc3, sc4, sc5 = st.columns(5)
-    presets = [0.0, 1.0, 2.0, 3.0, 5.0]
-    
-    for idx, p in enumerate(presets):
-        col = [sc1, sc2, sc3, sc4, sc5][idx]
-        with col:
-            if st.button(str(p), key=f"pre_{p}", use_container_width=True):
-                save_data(current_data['dir'], p)
+    cols = st.columns(5)
+    for i, p in enumerate([0.0, 1.0, 2.0, 3.0, 5.0]):
+        with cols[i]:
+            if st.button(str(p), key=f"p_{i}", use_container_width=True):
+                save_location_data(selected_loc, target_data['dir'], p)
                 st.rerun()
