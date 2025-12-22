@@ -10,7 +10,7 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v19.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v20.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -18,13 +18,12 @@ REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
-# 風レベル定義
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "CALM"},
-    "微風": {"val": 2.0, "color": "#00BCD4",   "label": "LIGHT"}, # Cyan
-    "弱風": {"val": 4.5, "color": "#2962FF",   "label": "WEAK"},  # Dark Blue
-    "中風": {"val": 7.0, "color": "#FFC107",   "label": "MID"},   # Yellow
-    "強風": {"val": 10.0, "color": "#FF5252",  "label": "HIGH"}   # Red
+    "微風": {"val": 2.0, "color": "#00BCD4",   "label": "LIGHT"}, 
+    "弱風": {"val": 4.5, "color": "#2962FF",   "label": "WEAK"},  
+    "中風": {"val": 7.0, "color": "#FFC107",   "label": "MID"},   
+    "強風": {"val": 10.0, "color": "#FF5252",  "label": "HIGH"}   
 }
 
 # ==========================================
@@ -68,7 +67,6 @@ def delete_point_data(distance_m):
             json.dump(current_data, f, ensure_ascii=False, indent=2)
 
 def clear_all_data():
-    """全ての風データを削除する"""
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump({}, f, ensure_ascii=False, indent=2)
@@ -114,15 +112,12 @@ def draw_map(data, max_dist):
             if level_name != "無風" and speed_val > 0:
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
-                
                 base_scale = 20.0 if max_dist <= 600 else 30.0
                 arrow_len = base_scale + (speed_val * 7.0)
-                
                 U = np.cos(arrow_angle_rad) * arrow_len
                 V = np.sin(arrow_angle_rad) * arrow_len
                 ax.quiver(x, y, U, V, color=arrow_color, angles='xy', scale_units='xy', scale=1,
                           width=0.025, headwidth=4, edgecolor='white', linewidth=1.5, zorder=4)
-                
                 ax.text(x + 20, y, label_text, color='black', fontsize=12, fontweight='bold',
                         bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3', edgecolor='none'), zorder=5)
             else:
@@ -136,7 +131,16 @@ def draw_map(data, max_dist):
 # ==========================================
 # 🚀 メイン処理
 # ==========================================
-st.set_page_config(page_title="Wind Monitor V19", layout="centered")
+
+# 【ここが変わりました！】
+# page_title: タブの名前
+# page_icon: タブのアイコン（絵文字または画像パス）
+st.set_page_config(
+    page_title="Wind Monitor", 
+    page_icon="✈️", 
+    layout="centered"
+)
+
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
@@ -146,7 +150,9 @@ mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "
 # ✈️ PILOT MODE
 # ----------------------------------------------------
 if mode == "Pilot (Map Monitor)":
-    st.markdown(f"### ✈️ Wind Map ({MAX_DISTANCE}m)")
+    # 画面上のタイトルもシンプルに統一
+    st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
+    
     all_data = load_all_data()
     fig = draw_map(all_data, MAX_DISTANCE)
     st.pyplot(fig, use_container_width=True)
@@ -209,7 +215,6 @@ elif mode == "Ground Crew (Input)":
 elif mode == "Settings (Config)":
     st.markdown("## ⚙️ Config")
     
-    # 1. 距離設定
     st.markdown("### 📏 滑走路設定")
     new_dist = st.number_input("滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
     if st.button("長さを保存", type="primary"):
@@ -220,11 +225,8 @@ elif mode == "Settings (Config)":
     
     st.write("---")
     
-    # 2. データ削除（今回追加）
     st.markdown("### 🗑️ データ管理")
     st.warning("登録されている全ての風データを削除します。元に戻せません。")
-    
-    # 誤操作防止のため、少し下のボタンを押させる
     if st.button("全ての風データを削除する"):
         clear_all_data()
         st.success("全てのデータを削除しました。")
