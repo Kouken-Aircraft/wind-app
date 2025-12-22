@@ -10,7 +10,7 @@ import numpy as np
 # ⚙️ 設定 (CONFIGURATION)
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v13.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v14.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -77,6 +77,7 @@ def delete_point_data(distance_m):
 # 🎨 マップ描画
 # ==========================================
 def draw_map(data, max_dist):
+    # パイロットが見やすいよう、少し縦長に調整
     fig_height = max(6, min(15, 10 * (max_dist / 600)))
     fig, ax = plt.subplots(figsize=(5, fig_height))
     
@@ -145,57 +146,50 @@ def draw_map(data, max_dist):
 # ==========================================
 # 📱 アプリメイン処理
 # ==========================================
-st.set_page_config(page_title="Wind Monitor V13", layout="centered")
+st.set_page_config(page_title="Wind Monitor V14", layout="centered")
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
+# モード選択
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
 # ------------------------------------------
-# ✈️ PILOT MODE
+# ✈️ PILOT MODE (地図のみ・入力機能ゼロ)
 # ------------------------------------------
 if mode == "Pilot (Map Monitor)":
     st.markdown(f"### ✈️ Wind Map ({MAX_DISTANCE}m)")
+    
+    # ここにはボタン配置のコードを一切書きません
+    # データの読み込みと描画のみを行います
     all_data = load_all_data()
     fig = draw_map(all_data, MAX_DISTANCE)
-    st.pyplot(fig)
+    
+    # 画面幅いっぱいに表示
+    st.pyplot(fig, use_container_width=True)
+    
     st.caption(f"Update: {time.strftime('%H:%M:%S')}")
     time.sleep(REFRESH_RATE)
     st.rerun()
 
 # ------------------------------------------
-# 🚩 GROUND CREW MODE
+# 🚩 GROUND CREW MODE (入力のみ・地図なし)
 # ------------------------------------------
 elif mode == "Ground Crew (Input)":
     st.markdown("## 🚩 Input Data")
     
-    # --- 位置記憶ロジック ---
-    # 1. URLパラメータから 'dist' を取得してみる
-    # (Streamlitのバージョンによって書き方が違うが、最新版に対応)
+    # --- URL記憶ロジック ---
     query_params = st.query_params
     default_dist = 0
-    
     if "dist" in query_params:
-        try:
-            default_dist = int(query_params["dist"])
-        except:
-            default_dist = 0
+        try: default_dist = int(query_params["dist"])
+        except: default_dist = 0
 
-    # 2. スライダーを表示（初期値＝URLから取った値）
-    my_dist = st.number_input(
-        "📍 現在位置 (m)", 
-        min_value=0, 
-        max_value=MAX_DISTANCE, 
-        step=50, 
-        value=default_dist
-    )
+    my_dist = st.number_input("📍 現在位置 (m)", min_value=0, max_value=MAX_DISTANCE, step=50, value=default_dist)
     
-    # 3. 入力された値がURLと違ったら、URLを更新する
-    # これにより、次回リロード時にこの値が使われる
     if my_dist != default_dist:
         st.query_params["dist"] = str(my_dist)
-    # -----------------------
+    # ----------------------
     
     st.write("---")
     
