@@ -10,7 +10,7 @@ import numpy as np
 # ⚙️ 設定 (CONFIGURATION)
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v14.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v15.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -28,7 +28,7 @@ WIND_LEVELS = {
 }
 
 # ==========================================
-# 💾 データ管理
+# 💾 データ管理関数
 # ==========================================
 def load_config():
     if not os.path.exists(CONFIG_FILE): return {"max_distance": 600}
@@ -74,10 +74,9 @@ def delete_point_data(distance_m):
             json.dump(current_data, f, ensure_ascii=False, indent=2)
 
 # ==========================================
-# 🎨 マップ描画
+# 🎨 マップ描画関数
 # ==========================================
 def draw_map(data, max_dist):
-    # パイロットが見やすいよう、少し縦長に調整
     fig_height = max(6, min(15, 10 * (max_dist / 600)))
     fig, ax = plt.subplots(figsize=(5, fig_height))
     
@@ -115,7 +114,6 @@ def draw_map(data, max_dist):
             if dist_m < 0 or dist_m > max_dist: continue
             
             x, y = 50, dist_m
-            
             ax.plot(x, y, 'o', color='black', markersize=8, zorder=3)
             
             if level_name != "無風" and speed_val > 0:
@@ -123,7 +121,6 @@ def draw_map(data, max_dist):
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
                 base_scale = 25.0 if max_dist <= 600 else 40.0
                 arrow_len = base_scale + (speed_val * 6.0)
-                
                 U = np.cos(arrow_angle_rad) * arrow_len
                 V = np.sin(arrow_angle_rad) * arrow_len
                 
@@ -144,53 +141,39 @@ def draw_map(data, max_dist):
     return fig
 
 # ==========================================
-# 📱 アプリメイン処理
+# 🖥️ 画面ごとの表示関数 (ここが重要！)
 # ==========================================
-st.set_page_config(page_title="Wind Monitor V14", layout="centered")
 
-config = load_config()
-MAX_DISTANCE = config["max_distance"]
-
-# モード選択
-mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
-
-# ------------------------------------------
-# ✈️ PILOT MODE (地図のみ・入力機能ゼロ)
-# ------------------------------------------
-if mode == "Pilot (Map Monitor)":
-    st.markdown(f"### ✈️ Wind Map ({MAX_DISTANCE}m)")
+def show_pilot_screen(max_distance):
+    """パイロット用画面：地図のみ表示"""
+    st.markdown(f"### ✈️ Wind Map ({max_distance}m)")
     
-    # ここにはボタン配置のコードを一切書きません
-    # データの読み込みと描画のみを行います
     all_data = load_all_data()
-    fig = draw_map(all_data, MAX_DISTANCE)
+    fig = draw_map(all_data, max_distance)
     
-    # 画面幅いっぱいに表示
     st.pyplot(fig, use_container_width=True)
-    
     st.caption(f"Update: {time.strftime('%H:%M:%S')}")
+    
+    # 自動更新
     time.sleep(REFRESH_RATE)
     st.rerun()
 
-# ------------------------------------------
-# 🚩 GROUND CREW MODE (入力のみ・地図なし)
-# ------------------------------------------
-elif mode == "Ground Crew (Input)":
+def show_crew_screen(max_distance):
+    """地上クルー用画面：入力のみ表示"""
     st.markdown("## 🚩 Input Data")
     
-    # --- URL記憶ロジック ---
+    # URL記憶ロジック
     query_params = st.query_params
     default_dist = 0
     if "dist" in query_params:
         try: default_dist = int(query_params["dist"])
         except: default_dist = 0
 
-    my_dist = st.number_input("📍 現在位置 (m)", min_value=0, max_value=MAX_DISTANCE, step=50, value=default_dist)
+    my_dist = st.number_input("📍 現在位置 (m)", min_value=0, max_value=max_distance, step=50, value=default_dist)
     
     if my_dist != default_dist:
         st.query_params["dist"] = str(my_dist)
-    # ----------------------
-    
+
     st.write("---")
     
     all_data = load_all_data()
@@ -228,15 +211,39 @@ elif mode == "Ground Crew (Input)":
         delete_point_data(my_dist)
         st.rerun()
 
-# ------------------------------------------
-# ⚙️ SETTINGS MODE
-# ------------------------------------------
-elif mode == "Settings (Config)":
+def show_settings_screen(max_distance):
+    """設定画面"""
     st.markdown("## ⚙️ Config")
     st.info("滑走路の全長を設定してください")
-    new_dist = st.number_input("Runway Length (m)", value=MAX_DISTANCE, step=50, min_value=100)
+    new_dist = st.number_input("Runway Length (m)", value=max_distance, step=50, min_value=100)
     if st.button("Save Settings", type="primary"):
         save_config(new_dist)
         st.success("Saved!")
         time.sleep(1)
         st.rerun()
+
+# ==========================================
+# 🚀 メイン実行ブロック
+# ==========================================
+def main():
+    st.set_page_config(page_title="Wind Monitor V15", layout="centered")
+    
+    # 設定読み込み
+    config = load_config()
+    max_distance = config["max_distance"]
+    
+    # モード選択
+    mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
+    
+    # 条件分岐で関数を呼び分ける（これでコードの混入を絶対防ぐ）
+    if mode == "Pilot (Map Monitor)":
+        show_pilot_screen(max_distance)
+        
+    elif mode == "Ground Crew (Input)":
+        show_crew_screen(max_distance)
+        
+    elif mode == "Settings (Config)":
+        show_settings_screen(max_distance)
+
+if __name__ == "__main__":
+    main()
