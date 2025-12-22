@@ -10,7 +10,7 @@ import numpy as np
 # ⚙️ 設定 (CONFIGURATION)
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v10.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v13.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -74,10 +74,9 @@ def delete_point_data(distance_m):
             json.dump(current_data, f, ensure_ascii=False, indent=2)
 
 # ==========================================
-# 🎨 マップ描画 (ライトモード)
+# 🎨 マップ描画
 # ==========================================
 def draw_map(data, max_dist):
-    # 背景色設定なし（デフォルトの白）
     fig_height = max(6, min(15, 10 * (max_dist / 600)))
     fig, ax = plt.subplots(figsize=(5, fig_height))
     
@@ -89,7 +88,6 @@ def draw_map(data, max_dist):
         img = mpimg.imread(bg_path)
         ax.imshow(img, extent=[0, 100, 0, max_dist])
     else:
-        # 明るいカラーリング
         ax.set_facecolor('#F0F5F0') 
         lawn = plt.Rectangle((0, 0), 100, max_dist, color='#8BC34A', alpha=0.3)
         ax.add_patch(lawn)
@@ -102,7 +100,6 @@ def draw_map(data, max_dist):
             ax.text(20, d, f"{d}m", color='black', fontsize=9, ha='right', va='center',
                     bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
 
-    # 矢印描画
     for dist_key, item in data.items():
         try:
             dist_m = int(dist_key)
@@ -118,7 +115,6 @@ def draw_map(data, max_dist):
             
             x, y = 50, dist_m
             
-            # マーカー（黒）
             ax.plot(x, y, 'o', color='black', markersize=8, zorder=3)
             
             if level_name != "無風" and speed_val > 0:
@@ -147,9 +143,9 @@ def draw_map(data, max_dist):
     return fig
 
 # ==========================================
-# 📱 アプリ画面
+# 📱 アプリメイン処理
 # ==========================================
-st.set_page_config(page_title="Wind Monitor V10", layout="centered")
+st.set_page_config(page_title="Wind Monitor V13", layout="centered")
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
@@ -157,22 +153,10 @@ MAX_DISTANCE = config["max_distance"]
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
 # ------------------------------------------
-# ⚙️ SETTINGS
-# ------------------------------------------
-if mode == "Settings (Config)":
-    st.markdown("## ⚙️ Config")
-    new_dist = st.number_input("Runway Length (m)", value=MAX_DISTANCE, step=50, min_value=100)
-    if st.button("Save Settings", type="primary"):
-        save_config(new_dist)
-        st.success("Saved!")
-        time.sleep(1)
-        st.rerun()
-
-# ------------------------------------------
 # ✈️ PILOT MODE
 # ------------------------------------------
-elif mode == "Pilot (Map Monitor)":
-    st.markdown(f"## ✈️ Wind Map ({MAX_DISTANCE}m)")
+if mode == "Pilot (Map Monitor)":
+    st.markdown(f"### ✈️ Wind Map ({MAX_DISTANCE}m)")
     all_data = load_all_data()
     fig = draw_map(all_data, MAX_DISTANCE)
     st.pyplot(fig)
@@ -183,10 +167,36 @@ elif mode == "Pilot (Map Monitor)":
 # ------------------------------------------
 # 🚩 GROUND CREW MODE
 # ------------------------------------------
-else:
+elif mode == "Ground Crew (Input)":
     st.markdown("## 🚩 Input Data")
     
-    my_dist = st.number_input("📍 現在位置 (m)", min_value=0, max_value=MAX_DISTANCE, step=50, value=0)
+    # --- 位置記憶ロジック ---
+    # 1. URLパラメータから 'dist' を取得してみる
+    # (Streamlitのバージョンによって書き方が違うが、最新版に対応)
+    query_params = st.query_params
+    default_dist = 0
+    
+    if "dist" in query_params:
+        try:
+            default_dist = int(query_params["dist"])
+        except:
+            default_dist = 0
+
+    # 2. スライダーを表示（初期値＝URLから取った値）
+    my_dist = st.number_input(
+        "📍 現在位置 (m)", 
+        min_value=0, 
+        max_value=MAX_DISTANCE, 
+        step=50, 
+        value=default_dist
+    )
+    
+    # 3. 入力された値がURLと違ったら、URLを更新する
+    # これにより、次回リロード時にこの値が使われる
+    if my_dist != default_dist:
+        st.query_params["dist"] = str(my_dist)
+    # -----------------------
+    
     st.write("---")
     
     all_data = load_all_data()
@@ -222,4 +232,17 @@ else:
     st.write("")
     if st.button("🗑️ データ削除", type="secondary"):
         delete_point_data(my_dist)
+        st.rerun()
+
+# ------------------------------------------
+# ⚙️ SETTINGS MODE
+# ------------------------------------------
+elif mode == "Settings (Config)":
+    st.markdown("## ⚙️ Config")
+    st.info("滑走路の全長を設定してください")
+    new_dist = st.number_input("Runway Length (m)", value=MAX_DISTANCE, step=50, min_value=100)
+    if st.button("Save Settings", type="primary"):
+        save_config(new_dist)
+        st.success("Saved!")
+        time.sleep(1)
         st.rerun()
