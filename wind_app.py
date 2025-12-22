@@ -10,7 +10,7 @@ import numpy as np
 # ⚙️ 設定 (CONFIGURATION)
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v11.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_dark.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -18,6 +18,7 @@ REFRESH_RATE = 2
 PAD_X = 50
 PAD_Y = 80
 
+# 風レベル定義
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "CALM"},
     "微風": {"val": 2.0, "color": "#2196F3",   "label": "LIGHT"}, 
@@ -54,7 +55,11 @@ def load_all_data():
 def save_point_data(distance_m, clock_dir, level_name):
     current_data = load_all_data()
     dist_key = str(distance_m)
-    current_data[dist_key] = {"clock": clock_dir, "level": level_name, "updated": time.time()}
+    current_data[dist_key] = {
+        "clock": clock_dir, 
+        "level": level_name, 
+        "updated": time.time()
+    }
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(current_data, f, ensure_ascii=False, indent=2)
@@ -69,12 +74,15 @@ def delete_point_data(distance_m):
             json.dump(current_data, f, ensure_ascii=False, indent=2)
 
 # ==========================================
-# 🎨 マップ描画
+# 🎨 マップ描画 (ダークモード仕様)
 # ==========================================
 def draw_map(data, max_dist):
-    # 全画面時に見やすくするため、少し横幅を広く取る設定に変更
+    # 背景色をダーク(#0e1117)に設定
     fig_height = max(6, min(15, 10 * (max_dist / 600)))
-    fig, ax = plt.subplots(figsize=(6, fig_height)) # 幅を5->6に変更
+    fig, ax = plt.subplots(figsize=(5, fig_height), facecolor='#0e1117')
+    
+    # プロットエリアもダークに
+    ax.set_facecolor('#0e1117')
     
     ax.set_xlim(0 - PAD_X, 100 + PAD_X)
     ax.set_ylim(0 - PAD_Y, max_dist + PAD_Y)
@@ -84,17 +92,26 @@ def draw_map(data, max_dist):
         img = mpimg.imread(bg_path)
         ax.imshow(img, extent=[0, 100, 0, max_dist])
     else:
-        ax.set_facecolor('#F0F5F0') 
-        lawn = plt.Rectangle((0, 0), 100, max_dist, color='#8BC34A', alpha=0.3)
+        # 画像がない場合の自動描画（ダークモード版）
+        
+        # 滑走路エリア（少し明るい黒）
+        lawn = plt.Rectangle((0, 0), 100, max_dist, color='#1c1c1c', alpha=1.0)
         ax.add_patch(lawn)
-        runway = plt.Rectangle((30, 0), 40, max_dist, color='#555555', alpha=0.9)
+        
+        # 滑走路本体（グレー）
+        runway = plt.Rectangle((30, 0), 40, max_dist, color='#333333', alpha=1.0)
         ax.add_patch(runway)
+        
+        # センターライン（白）
         ax.plot([50, 50], [0, max_dist], color='white', linestyle='--', linewidth=2)
+        
+        # 距離マーカー（白文字）
         step = 100 if max_dist > 300 else 50
         for d in range(0, max_dist + 1, step):
-            ax.text(20, d, f"{d}m", color='black', fontsize=9, ha='right', va='center',
-                    bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
+            ax.text(20, d, f"{d}m", color='#aaaaaa', fontsize=9, ha='right', va='center',
+                    bbox=dict(facecolor='#0e1117', alpha=0.7, edgecolor='none', pad=1))
 
+    # 矢印描画
     for dist_key, item in data.items():
         try:
             dist_m = int(dist_key)
@@ -110,7 +127,8 @@ def draw_map(data, max_dist):
             
             x, y = 50, dist_m
             
-            ax.plot(x, y, 'o', color='black', markersize=8, zorder=3)
+            # マーカー（白）
+            ax.plot(x, y, 'o', color='white', markersize=8, zorder=3)
             
             if level_name != "無風" and speed_val > 0:
                 wind_from_angle = 90 - (clock * 30)
@@ -126,11 +144,13 @@ def draw_map(data, max_dist):
                           width=0.025, headwidth=4, 
                           edgecolor='white', linewidth=1.5, zorder=4)
                 
+                # テキストラベル（視認性優先で白背景・黒文字のままにするか、ダークにするか）
+                # ここは「見やすさ命」で白背景のままにします
                 ax.text(x + 20, y, label_text, color='black', fontsize=12, fontweight='bold',
-                        bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3', edgecolor='none'), zorder=5)
+                        bbox=dict(facecolor='white', alpha=0.9, boxstyle='round,pad=0.3', edgecolor='none'), zorder=5)
             else:
-                ax.text(x + 20, y, "CALM", color='gray', fontsize=11, fontweight='bold',
-                        bbox=dict(facecolor='white', alpha=0.8, boxstyle='round', edgecolor='none'), zorder=5)
+                ax.text(x + 20, y, "CALM", color='#888888', fontsize=11, fontweight='bold',
+                        bbox=dict(facecolor='#1c1c1c', alpha=0.8, boxstyle='round', edgecolor='#555555'), zorder=5)
         except: continue
 
     ax.axis('off')
@@ -140,7 +160,7 @@ def draw_map(data, max_dist):
 # ==========================================
 # 📱 アプリ画面
 # ==========================================
-st.set_page_config(page_title="Wind Monitor V11", layout="wide") # wideモードをデフォルトに
+st.set_page_config(page_title="Wind Monitor Dark", layout="centered")
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
@@ -160,48 +180,13 @@ if mode == "Settings (Config)":
         st.rerun()
 
 # ------------------------------------------
-# ✈️ PILOT MODE (全画面機能付き)
+# ✈️ PILOT MODE
 # ------------------------------------------
 elif mode == "Pilot (Map Monitor)":
-    
-    # 【変更点】全画面切り替えスイッチ
-    # スイッチ自体を目立つように配置
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        st.markdown(f"## ✈️ Wind Map ({MAX_DISTANCE}m)")
-    with c2:
-        # トグルスイッチを作成
-        is_fullscreen = st.toggle("🔍全画面", value=False)
-
-    # 全画面モードがONのとき、CSSで強制的に余白とメニューを消す
-    if is_fullscreen:
-        st.markdown("""
-            <style>
-                /* サイドバーを隠す */
-                [data-testid="stSidebar"] {display: none;}
-                /* 上のヘッダーバーを隠す */
-                header {visibility: hidden;}
-                /* 全体の余白をゼロにする */
-                .block-container {
-                    padding-top: 1rem;
-                    padding-left: 0rem;
-                    padding-right: 0rem;
-                    max_width: 100%;
-                }
-                /* フッターがあれば消す */
-                footer {visibility: hidden;}
-            </style>
-        """, unsafe_allow_html=True)
-        
-        # 戻るためのヒントを表示（トグルは画面に残る）
-        st.caption("※右上のスイッチをOFFにするとメニューが戻ります")
-
+    st.markdown(f"## ✈️ Wind Map ({MAX_DISTANCE}m)")
     all_data = load_all_data()
     fig = draw_map(all_data, MAX_DISTANCE)
-    
-    # use_container_width=True で横幅いっぱいに広げる
-    st.pyplot(fig, use_container_width=True)
-    
+    st.pyplot(fig)
     st.caption(f"Update: {time.strftime('%H:%M:%S')}")
     time.sleep(REFRESH_RATE)
     st.rerun()
@@ -211,6 +196,7 @@ elif mode == "Pilot (Map Monitor)":
 # ------------------------------------------
 else:
     st.markdown("## 🚩 Input Data")
+    
     my_dist = st.number_input("📍 現在位置 (m)", min_value=0, max_value=MAX_DISTANCE, step=50, value=0)
     st.write("---")
     
@@ -220,6 +206,7 @@ else:
     st.info(f"送信データ: {my_dist}m = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
 
     st.write("### ① 風向き (時計)")
+    # スマホ対応：3列カラム生成方式
     clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     
     for i in range(0, 12, 3):
