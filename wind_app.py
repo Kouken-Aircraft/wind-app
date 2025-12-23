@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v24.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v25.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -104,7 +104,6 @@ def draw_map(data, max_dist):
             speed_val = level_info["val"]
             arrow_color = level_info["color"]
             label_text = level_info["label"]
-            
             if dist_m < 0 or dist_m > max_dist: continue
             x, y = 50, dist_m
             ax.plot(x, y, 'o', color='black', markersize=8, zorder=3)
@@ -135,46 +134,49 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed" # 最初は閉じておく
 )
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
-# --- 自動サイドバー収納ロジック ---
+# --- モード選択 ---
 if 'last_mode' not in st.session_state:
     st.session_state['last_mode'] = None
 
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
-# モードが変わった場合のみJSを実行
+# モードが変わったらJSを実行
 if mode != st.session_state['last_mode']:
     st.session_state['last_mode'] = mode
     
-    # 【修正点】st.rerun() を削除しました
-    # Pythonが再読み込みしてしまうとJavaScriptが動く前に画面がリセットされてしまうためです。
-    # このスクリプトだけを実行させて、Pythonはそのまま処理を進めます。
+    # 【改良版JS】「開いている時だけ」ボタンを押す
     js = """
     <script>
-        // ボタンを探し続けるループを開始
         var count = 0;
         var checkExist = setInterval(function() {
-           // data-testid="stSidebarCollapseButton" が「閉じる」ボタン（> または ×）です
-           var buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
-           if (buttons.length > 0) {
-              // ボタンが見つかったらクリックしてループ終了
-              buttons[0].click();
-              clearInterval(checkExist);
+           // サイドバー要素自体を取得
+           var sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+           // 閉じるボタンを取得
+           var btn = window.parent.document.querySelector('button[data-testid="stSidebarCollapseButton"]');
+           
+           if (sidebar && btn) {
+               // サイドバーの幅や属性を見て、開いているか判定する
+               var isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
+               
+               if (isExpanded) {
+                   btn.click(); // 開いていれば押す
+               }
+               clearInterval(checkExist);
            }
            count++;
-           if (count > 20) { clearInterval(checkExist); } // 2秒経ったら諦める
+           if (count > 20) { clearInterval(checkExist); }
         }, 100);
     </script>
     """
     components.html(js, height=0, width=0)
-    
-    # ⚠️ ここにあった time.sleep と st.rerun は削除しました
-# --------------------------------
+    time.sleep(0.1)
+    # rerunなしで進める（rerunするとJSがキャンセルされることがあるため）
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
