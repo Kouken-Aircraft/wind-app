@@ -5,12 +5,14 @@ import time
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
+# 【追加】JavaScriptを動かすためのライブラリ
+import streamlit.components.v1 as components
 
 # ==========================================
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v20.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v21.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -99,7 +101,6 @@ def draw_map(data, max_dist):
             dist_m = int(dist_key)
             clock = item['clock']
             level_name = item.get('level', "無風")
-            
             level_info = WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])
             speed_val = level_info["val"]
             arrow_color = level_info["color"]
@@ -131,28 +132,47 @@ def draw_map(data, max_dist):
 # ==========================================
 # 🚀 メイン処理
 # ==========================================
-
-# 【ここが変わりました！】
-# page_title: タブの名前
-# page_icon: タブのアイコン（絵文字または画像パス）
 st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
-    layout="centered"
+    layout="centered",
+    initial_sidebar_state="collapsed" # 最初は閉じておく
 )
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
+# --- モード選択と自動クローズ処理 ---
+if 'last_mode' not in st.session_state:
+    st.session_state['last_mode'] = None
+
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
+
+# モードが変わった瞬間を検知
+if mode != st.session_state['last_mode']:
+    st.session_state['last_mode'] = mode
+    # JavaScriptを注入してサイドバーの「×ボタン」を強制クリックさせる
+    components.html("""
+        <script>
+            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (sidebar) {
+                const closeBtn = window.parent.document.querySelector('[data-testid="stSidebarCollapseButton"]');
+                if (closeBtn) {
+                    closeBtn.click();
+                }
+            }
+        </script>
+    """, height=0, width=0)
+    # 少し待ってからリラン（画面更新）
+    time.sleep(0.1)
+    st.rerun()
+# -----------------------------------
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
 # ----------------------------------------------------
 if mode == "Pilot (Map Monitor)":
-    # 画面上のタイトルもシンプルに統一
     st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
-    
     all_data = load_all_data()
     fig = draw_map(all_data, MAX_DISTANCE)
     st.pyplot(fig, use_container_width=True)
