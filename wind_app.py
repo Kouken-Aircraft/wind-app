@@ -10,7 +10,7 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v30.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v31.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -103,7 +103,6 @@ def draw_map(data, max_dist):
             speed_val = level_info["val"]
             arrow_color = level_info["color"]
             label_text = level_info["label"]
-            
             if dist_m < 0 or dist_m > max_dist: continue
             x, y = 50, dist_m
             ax.plot(x, y, 'o', color='black', markersize=8, zorder=3)
@@ -134,96 +133,108 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    initial_sidebar_state="expanded" # 最初はメニューを開いておく
+    initial_sidebar_state="expanded"
 )
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
-# 自動で閉じる処理は削除しました。手動で閉じてください。
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
+
+# ⚠️ ここが重要：画面上のすべてをこの「canvas」の中に描きます
+# こうすることで、モード切替時に中身が完全にリセットされます
+canvas = st.empty()
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
 # ----------------------------------------------------
 if mode == "Pilot (Map Monitor)":
-    st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
-    all_data = load_all_data()
-    fig = draw_map(all_data, MAX_DISTANCE)
-    st.pyplot(fig, use_container_width=True)
-    st.caption(f"Update: {time.strftime('%H:%M:%S')}")
+    # キャンバスの中に描画
+    with canvas.container():
+        st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
+        all_data = load_all_data()
+        fig = draw_map(all_data, MAX_DISTANCE)
+        st.pyplot(fig, use_container_width=True)
+        st.caption(f"Update: {time.strftime('%H:%M:%S')}")
+        
+        # メモリ解放（残像防止の重要ポイント）
+        plt.close(fig)
+
     time.sleep(REFRESH_RATE)
     st.rerun()
-    st.stop()
 
 # ----------------------------------------------------
 # 🚩 GROUND CREW MODE
 # ----------------------------------------------------
 elif mode == "Ground Crew (Input)":
-    st.markdown("## 🚩 Input Data")
-    
-    default_dist = 0
-    if "dist" in st.query_params:
-        try: default_dist = int(st.query_params["dist"])
-        except: default_dist = 0
+    # キャンバスの中に描画
+    with canvas.container():
+        st.markdown("## 🚩 Input Data")
+        
+        default_dist = 0
+        if "dist" in st.query_params:
+            try: default_dist = int(st.query_params["dist"])
+            except: default_dist = 0
 
-    my_dist = st.number_input("📍 現在位置 (m)", min_value=0, max_value=MAX_DISTANCE, step=50, value=default_dist)
-    if my_dist != default_dist: st.query_params["dist"] = str(my_dist)
-    st.write("---")
-    
-    all_data = load_all_data()
-    current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風"})
-    st.info(f"送信データ: {my_dist}m = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
+        my_dist = st.number_input("📍 現在位置 (m)", min_value=0, max_value=MAX_DISTANCE, step=50, value=default_dist)
+        if my_dist != default_dist: st.query_params["dist"] = str(my_dist)
+        st.write("---")
+        
+        all_data = load_all_data()
+        current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風"})
+        st.info(f"送信データ: {my_dist}m = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
 
-    st.write("### ① 風向き (時計)")
-    clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    for i in range(0, 12, 3):
-        cols = st.columns(3)
-        chunk = clock_labels[i : i+3]
-        for j, hour in enumerate(chunk):
-            with cols[j]:
-                btn_type = "primary" if current_val['clock'] == hour else "secondary"
-                if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
-                    save_point_data(my_dist, hour, current_val['level'])
+        st.write("### ① 風向き (時計)")
+        clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        for i in range(0, 12, 3):
+            cols = st.columns(3)
+            chunk = clock_labels[i : i+3]
+            for j, hour in enumerate(chunk):
+                with cols[j]:
+                    btn_type = "primary" if current_val['clock'] == hour else "secondary"
+                    if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
+                        save_point_data(my_dist, hour, current_val['level'])
+                        st.rerun()
+
+        st.write("---")
+        st.write("### ② 風の強さ")
+        cols = st.columns(5)
+        levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
+        for i, lvl in enumerate(levels_jp):
+            with cols[i]:
+                is_selected = (current_val['level'] == lvl)
+                btn_type = "primary" if is_selected else "secondary"
+                if st.button(lvl, key=f"lvl_{i}", type=btn_type, use_container_width=True):
+                    save_point_data(my_dist, current_val['clock'], lvl)
                     st.rerun()
-
-    st.write("---")
-    st.write("### ② 風の強さ")
-    cols = st.columns(5)
-    levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
-    for i, lvl in enumerate(levels_jp):
-        with cols[i]:
-            is_selected = (current_val['level'] == lvl)
-            btn_type = "primary" if is_selected else "secondary"
-            if st.button(lvl, key=f"lvl_{i}", type=btn_type, use_container_width=True):
-                save_point_data(my_dist, current_val['clock'], lvl)
-                st.rerun()
-                
-    st.write("")
-    if st.button("🗑️ データ削除", type="secondary"):
-        delete_point_data(my_dist)
-        st.rerun()
+                    
+        st.write("")
+        if st.button("🗑️ データ削除", type="secondary"):
+            delete_point_data(my_dist)
+            st.rerun()
 
 # ----------------------------------------------------
 # ⚙️ SETTINGS MODE
 # ----------------------------------------------------
 elif mode == "Settings (Config)":
-    st.markdown("## ⚙️ Config")
-    
-    st.markdown("### 📏 滑走路設定")
-    new_dist = st.number_input("滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
-    if st.button("長さを保存", type="primary"):
-        save_config(new_dist)
-        st.success("設定を保存しました！")
-        time.sleep(1)
-        st.rerun()
-    
-    st.write("---")
-    
-    st.markdown("### 🗑️ データ管理")
-    st.warning("登録されている全ての風データを削除します。元に戻せません。")
-    if st.button("全ての風データを削除する"):
-        clear_all_data()
-        st.success("全てのデータを削除しました。")
-        time.sleep(1)
-        st.rerun()
+    # キャンバスの中に描画
+    with canvas.container():
+        st.markdown("## ⚙️ Config")
+        
+        st.markdown("### 📏 滑走路設定")
+        new_dist = st.number_input("滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
+        if st.button("長さを保存", type="primary"):
+            save_config(new_dist)
+            st.success("設定を保存しました！")
+            time.sleep(1)
+            st.rerun()
+        
+        st.write("---")
+        
+        st.markdown("### 🗑️ データ管理")
+        st.warning("登録されている全ての風データを削除します。元に戻せません。")
+        if st.button("全ての風データを削除する"):
+            clear_all_data()
+            st.success("全てのデータを削除しました。")
+            time.sleep(1)
+            st.rerun()
