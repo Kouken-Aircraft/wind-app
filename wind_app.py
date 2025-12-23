@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v23.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v24.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -100,7 +100,6 @@ def draw_map(data, max_dist):
             dist_m = int(dist_key)
             clock = item['clock']
             level_name = item.get('level', "無風")
-            
             level_info = WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])
             speed_val = level_info["val"]
             arrow_color = level_info["color"]
@@ -136,7 +135,7 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    initial_sidebar_state="collapsed" # 【変更】初期状態は閉じる
+    initial_sidebar_state="collapsed"
 )
 
 config = load_config()
@@ -152,28 +151,29 @@ mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "
 if mode != st.session_state['last_mode']:
     st.session_state['last_mode'] = mode
     
-    # 【修正】少し待ってからボタンを確実に押すスクリプト
+    # 【修正点】st.rerun() を削除しました
+    # Pythonが再読み込みしてしまうとJavaScriptが動く前に画面がリセットされてしまうためです。
+    # このスクリプトだけを実行させて、Pythonはそのまま処理を進めます。
     js = """
     <script>
+        // ボタンを探し続けるループを開始
         var count = 0;
         var checkExist = setInterval(function() {
-           // サイドバーを閉じるボタン(> または x)を探す
-           var buttons = window.parent.document.querySelectorAll('button[data-testid="stSidebarCollapseButton"]');
+           // data-testid="stSidebarCollapseButton" が「閉じる」ボタン（> または ×）です
+           var buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
            if (buttons.length > 0) {
+              // ボタンが見つかったらクリックしてループ終了
               buttons[0].click();
               clearInterval(checkExist);
            }
            count++;
-           // 5秒探して見つからなければ諦める
-           if (count > 50) { clearInterval(checkExist); }
-        }, 100); // 0.1秒ごとにチェック
+           if (count > 20) { clearInterval(checkExist); } // 2秒経ったら諦める
+        }, 100);
     </script>
     """
     components.html(js, height=0, width=0)
     
-    # 画面更新のために少し待機
-    time.sleep(0.1)
-    st.rerun()
+    # ⚠️ ここにあった time.sleep と st.rerun は削除しました
 # --------------------------------
 
 # ----------------------------------------------------
