@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v25.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v26.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -134,41 +134,40 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    initial_sidebar_state="collapsed" # 最初は閉じておく
+    initial_sidebar_state="collapsed"
 )
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
-# --- モード選択 ---
+# --- 自動サイドバー収納ロジック ---
 if 'last_mode' not in st.session_state:
     st.session_state['last_mode'] = None
 
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
-# モードが変わったらJSを実行
 if mode != st.session_state['last_mode']:
     st.session_state['last_mode'] = mode
     
-    # 【改良版JS】「開いている時だけ」ボタンを押す
+    # 【最強版JS】あなたが教えてくれたアイコン名を使って確実に閉じる
     js = """
     <script>
         var count = 0;
         var checkExist = setInterval(function() {
-           // サイドバー要素自体を取得
-           var sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]');
-           // 閉じるボタンを取得
-           var btn = window.parent.document.querySelector('button[data-testid="stSidebarCollapseButton"]');
+           // 1. 画面内の全てのアイコン（spanタグ）を取得する
+           var spans = window.parent.document.getElementsByTagName('span');
            
-           if (sidebar && btn) {
-               // サイドバーの幅や属性を見て、開いているか判定する
-               var isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
-               
-               if (isExpanded) {
-                   btn.click(); // 開いていれば押す
+           for (var i = 0; i < spans.length; i++) {
+               // 2. その中に「keyboard_double_arrow_left」という文字が入っているか探す
+               if (spans[i].innerText === 'keyboard_double_arrow_left') {
+                   // 3. 見つけたら、その親の親...つまりボタンをクリックする！
+                   // アイコン自体をクリックしても反応することが多いので、まずはアイコンをクリック
+                   spans[i].click();
+                   clearInterval(checkExist);
+                   return;
                }
-               clearInterval(checkExist);
            }
+           
            count++;
            if (count > 20) { clearInterval(checkExist); }
         }, 100);
@@ -176,7 +175,6 @@ if mode != st.session_state['last_mode']:
     """
     components.html(js, height=0, width=0)
     time.sleep(0.1)
-    # rerunなしで進める（rerunするとJSがキャンセルされることがあるため）
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
