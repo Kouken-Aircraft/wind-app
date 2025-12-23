@@ -2,7 +2,6 @@ import streamlit as st
 import json
 import os
 import time
-# 【追加】日本時間を計算するためのライブラリ
 from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -12,11 +11,11 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v33.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v35.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
-REFRESH_RATE = 3
+REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
@@ -32,14 +31,15 @@ WIND_LEVELS = {
 # 💾 関数群
 # ==========================================
 def load_config():
-    if not os.path.exists(CONFIG_FILE): return {"max_distance": 600}
+    default_conf = {"max_distance": 600, "max_crosswind": 3.0}
+    if not os.path.exists(CONFIG_FILE): return default_conf
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except: return {"max_distance": 600}
+    except: return default_conf
 
-def save_config(max_distance):
-    config = {"max_distance": max_distance}
+def save_config(max_distance, max_crosswind):
+    config = {"max_distance": max_distance, "max_crosswind": max_crosswind}
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
@@ -73,6 +73,19 @@ def clear_all_data():
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump({}, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
+
+def calculate_max_crosswind(data):
+    max_cross = 0.0
+    for item in data.values():
+        level_name = item.get('level', "無風")
+        clock = item.get('clock', 12)
+        speed = WIND_LEVELS.get(level_name, {}).get("val", 0.0)
+        angle_deg = clock * 30 
+        angle_rad = np.radians(angle_deg)
+        crosswind = abs(speed * np.sin(angle_rad))
+        if crosswind > max_cross:
+            max_cross = crosswind
+    return max_cross
 
 def draw_map(data, max_dist):
     fig_height = max(6, min(15, 10 * (max_dist / 600)))
@@ -139,11 +152,39 @@ st.set_page_config(
 )
 
 config = load_config()
-MAX_DISTANCE = config["max_distance"]
+MAX_DISTANCE = config.get("max_distance", 600)
+MAX_CROSSWIND_LIMIT = config.get("max_crosswind", 3.0)
 
-mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
+# ----------------------------------------------
+# 🔘 【改良】デカボタン式モード選択 (Session State管理)
+# ----------------------------------------------
+if "current_mode" not in st.session_state:
+    st.session_state["current_mode"] = "Ground Crew (Input)" # 初期値
 
-# 3つの専用エリアを確保
+st.sidebar.markdown("### 🔀 Mode Selection")
+
+# モード一覧
+MODES = [
+    "Ground Crew (Input)",
+    "Pilot (Map Monitor)",
+    "Settings (Config)"
+]
+
+# デカボタンを描画
+for m in MODES:
+    is_active = (st.session_state["current_mode"] == m)
+    # 選択中は "primary"(色付き)、未選択は "secondary"(白)
+    btn_type = "primary" if is_active else "secondary"
+    
+    # use_container_width=True で横幅いっぱいに広げる
+    if st.sidebar.button(m, key=f"btn_mode_{m}", type=btn_type, use_container_width=True):
+        st.session_state["current_mode"] = m
+        st.rerun() # ボタンを押したら即座に画面更新
+
+mode = st.session_state["current_mode"]
+# ----------------------------------------------
+
+
 pilot_area = st.empty()
 crew_area = st.empty()
 settings_area = st.empty()
@@ -156,16 +197,26 @@ if mode == "Pilot (Map Monitor)":
     settings_area.empty()
     
     with pilot_area.container():
-        st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
         all_data = load_all_data()
+        current_max_cross = calculate_max_crosswind(all_data)
+        
+        status_col1, status_col2 = st.columns([2, 1])
+        with status_col1:
+            st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
+        with status_col2:
+            if current_max_cross > MAX_CROSSWIND_LIMIT:
+                st.error(f"🔴 NO GO\nCross: {current_max_cross:.1f}m/s")
+            elif current_max_cross > 0:
+                st.success(f"🟢 GO\nCross: {current_max_cross:.1f}m/s")
+            else:
+                st.info("⚪ CALM")
+
         fig = draw_map(all_data, MAX_DISTANCE)
         st.pyplot(fig, use_container_width=True)
         
-        # 【変更】日本時間 (JST) を計算して表示
         JST = timezone(timedelta(hours=9))
         now_jst = datetime.now(JST)
-        st.caption(f"Update: {now_jst.strftime('%H:%M:%S')} (JST)")
-        
+        st.caption(f"Update: {now_jst.strftime('%H:%M:%S')} (JST) | Limit: {MAX_CROSSWIND_LIMIT}m/s")
         plt.close(fig)
 
     time.sleep(REFRESH_RATE)
@@ -232,17 +283,22 @@ elif mode == "Settings (Config)":
 
     with settings_area.container():
         st.markdown("## ⚙️ Config")
-        
         st.markdown("### 📏 滑走路設定")
         new_dist = st.number_input("滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
-        if st.button("長さを保存", type="primary"):
-            save_config(new_dist)
+        st.write("---")
+        
+        st.markdown("### 🛡️ 安全基準 (Go/No-Go)")
+        new_limit = st.slider("横風制限値 (m/s)", 0.0, 10.0, MAX_CROSSWIND_LIMIT, 0.5)
+        st.caption("※この値を超えると画面に「NO GO」と表示されます。")
+
+        st.write("")
+        if st.button("設定を保存", type="primary"):
+            save_config(new_dist, new_limit)
             st.success("設定を保存しました！")
             time.sleep(1)
             st.rerun()
         
         st.write("---")
-        
         st.markdown("### 🗑️ データ管理")
         st.warning("登録されている全ての風データを削除します。元に戻せません。")
         if st.button("全ての風データを削除する"):
@@ -250,4 +306,3 @@ elif mode == "Settings (Config)":
             st.success("全てのデータを削除しました。")
             time.sleep(1)
             st.rerun()
-
