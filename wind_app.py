@@ -10,7 +10,7 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v31.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v32.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -141,23 +141,26 @@ MAX_DISTANCE = config["max_distance"]
 
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
-# ⚠️ ここが重要：画面上のすべてをこの「canvas」の中に描きます
-# こうすることで、モード切替時に中身が完全にリセットされます
-canvas = st.empty()
+# ⚠️ 【重要】3つの専用エリア（座席）を確保
+pilot_area = st.empty()
+crew_area = st.empty()
+settings_area = st.empty()
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
 # ----------------------------------------------------
 if mode == "Pilot (Map Monitor)":
-    # キャンバスの中に描画
-    with canvas.container():
+    # 🧹 他のエリアを強制的に掃除
+    crew_area.empty()
+    settings_area.empty()
+    
+    # パイロット席に描画
+    with pilot_area.container():
         st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
         all_data = load_all_data()
         fig = draw_map(all_data, MAX_DISTANCE)
         st.pyplot(fig, use_container_width=True)
         st.caption(f"Update: {time.strftime('%H:%M:%S')}")
-        
-        # メモリ解放（残像防止の重要ポイント）
         plt.close(fig)
 
     time.sleep(REFRESH_RATE)
@@ -167,8 +170,12 @@ if mode == "Pilot (Map Monitor)":
 # 🚩 GROUND CREW MODE
 # ----------------------------------------------------
 elif mode == "Ground Crew (Input)":
-    # キャンバスの中に描画
-    with canvas.container():
+    # 🧹 他のエリアを強制的に掃除
+    pilot_area.empty()
+    settings_area.empty()
+    
+    # クルー席に描画
+    with crew_area.container():
         st.markdown("## 🚩 Input Data")
         
         default_dist = 0
@@ -217,8 +224,12 @@ elif mode == "Ground Crew (Input)":
 # ⚙️ SETTINGS MODE
 # ----------------------------------------------------
 elif mode == "Settings (Config)":
-    # キャンバスの中に描画
-    with canvas.container():
+    # 🧹 他のエリアを強制的に掃除
+    pilot_area.empty()
+    crew_area.empty()
+
+    # 設定席に描画
+    with settings_area.container():
         st.markdown("## ⚙️ Config")
         
         st.markdown("### 📏 滑走路設定")
