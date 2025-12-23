@@ -5,14 +5,13 @@ import time
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
-# JavaScript動作用
 import streamlit.components.v1 as components
 
 # ==========================================
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v22.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v23.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -137,7 +136,7 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    initial_sidebar_state="expanded" # 最初は開いておく（モードを選ばせるため）
+    initial_sidebar_state="collapsed" # 【変更】初期状態は閉じる
 )
 
 config = load_config()
@@ -147,24 +146,32 @@ MAX_DISTANCE = config["max_distance"]
 if 'last_mode' not in st.session_state:
     st.session_state['last_mode'] = None
 
-# サイドバー表示
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
-# モードが変わったらJavaScriptを実行してサイドバーを閉じる
+# モードが変わった場合のみJSを実行
 if mode != st.session_state['last_mode']:
     st.session_state['last_mode'] = mode
     
-    # 左上のボタン(Collapse Button)をクリックするJS
-    components.html("""
-        <script>
-            // Streamlitのサイドバー開閉ボタンを探してクリック
-            const buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
-            if (buttons.length > 0) {
-                buttons[0].click();
-            }
-        </script>
-    """, height=0, width=0)
+    # 【修正】少し待ってからボタンを確実に押すスクリプト
+    js = """
+    <script>
+        var count = 0;
+        var checkExist = setInterval(function() {
+           // サイドバーを閉じるボタン(> または x)を探す
+           var buttons = window.parent.document.querySelectorAll('button[data-testid="stSidebarCollapseButton"]');
+           if (buttons.length > 0) {
+              buttons[0].click();
+              clearInterval(checkExist);
+           }
+           count++;
+           // 5秒探して見つからなければ諦める
+           if (count > 50) { clearInterval(checkExist); }
+        }, 100); // 0.1秒ごとにチェック
+    </script>
+    """
+    components.html(js, height=0, width=0)
     
+    # 画面更新のために少し待機
     time.sleep(0.1)
     st.rerun()
 # --------------------------------
