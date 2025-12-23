@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v26.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v27.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -149,23 +149,34 @@ mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "
 if mode != st.session_state['last_mode']:
     st.session_state['last_mode'] = mode
     
-    # 【最強版JS】あなたが教えてくれたアイコン名を使って確実に閉じる
+    # 閉じるためのJavaScript (ハイブリッド版)
     js = """
     <script>
         var count = 0;
         var checkExist = setInterval(function() {
-           // 1. 画面内の全てのアイコン（spanタグ）を取得する
-           var spans = window.parent.document.getElementsByTagName('span');
+           var success = false;
            
+           // 作戦A: アイコン(keyboard_double_arrow_left)を探してクリック
+           var spans = window.parent.document.getElementsByTagName('span');
            for (var i = 0; i < spans.length; i++) {
-               // 2. その中に「keyboard_double_arrow_left」という文字が入っているか探す
                if (spans[i].innerText === 'keyboard_double_arrow_left') {
-                   // 3. 見つけたら、その親の親...つまりボタンをクリックする！
-                   // アイコン自体をクリックしても反応することが多いので、まずはアイコンをクリック
                    spans[i].click();
-                   clearInterval(checkExist);
-                   return;
+                   success = true;
+                   break;
                }
+           }
+           
+           // 作戦B: もしアイコンがダメなら、ボタンIDを探してクリック
+           if (!success) {
+               var buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
+               if (buttons.length > 0) {
+                   buttons[0].click();
+                   success = true;
+               }
+           }
+
+           if (success) {
+               clearInterval(checkExist);
            }
            
            count++;
@@ -174,7 +185,9 @@ if mode != st.session_state['last_mode']:
     </script>
     """
     components.html(js, height=0, width=0)
-    time.sleep(0.1)
+    
+    # 【重要】Pilotモードの重い処理が始まる前に、ここで少し待ってJSを完了させる
+    time.sleep(0.5)
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
