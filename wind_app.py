@@ -5,13 +5,12 @@ import time
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
-import streamlit.components.v1 as components
 
 # ==========================================
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v29.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v30.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -104,6 +103,7 @@ def draw_map(data, max_dist):
             speed_val = level_info["val"]
             arrow_color = level_info["color"]
             label_text = level_info["label"]
+            
             if dist_m < 0 or dist_m > max_dist: continue
             x, y = 50, dist_m
             ax.plot(x, y, 'o', color='black', markersize=8, zorder=3)
@@ -134,58 +134,14 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded" # 最初はメニューを開いておく
 )
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
-# モード選択
+# 自動で閉じる処理は削除しました。手動で閉じてください。
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
-
-# =======================================================
-# 🔥 【修正版】常時実行される自動クローズ処理
-# =======================================================
-# モード変更の有無にかかわらず、画面が読み込まれるたびに実行されます。
-# これにより、Pilotモードの自動更新時でもサイドバーが閉じた状態を維持します。
-js = """
-<script>
-    var count = 0;
-    // 0.1秒ごとにチェック (計2秒間)
-    var checkExist = setInterval(function() {
-       // サイドバーが開いているかチェック
-       var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-       if (sidebar && sidebar.getAttribute('aria-expanded') === 'true') {
-           
-           // 開いていたら、アイコンを探してクリック
-           var spans = window.parent.document.getElementsByTagName('span');
-           var clicked = false;
-           for (var i = 0; i < spans.length; i++) {
-               if (spans[i].innerText === 'keyboard_double_arrow_left') {
-                   spans[i].click();
-                   clicked = true;
-                   break;
-               }
-           }
-           
-           // アイコンがなければボタンIDでクリック
-           if (!clicked) {
-               var buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
-               if (buttons.length > 0) {
-                   buttons[0].click();
-               }
-           }
-           clearInterval(checkExist);
-       }
-       
-       count++;
-       if (count > 20) { clearInterval(checkExist); }
-    }, 100);
-</script>
-"""
-components.html(js, height=0, width=0)
-# =======================================================
-
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
