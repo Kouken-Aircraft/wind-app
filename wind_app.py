@@ -5,14 +5,14 @@ import time
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
-# 【追加】JavaScriptを動かすためのライブラリ
+# JavaScript動作用
 import streamlit.components.v1 as components
 
 # ==========================================
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v21.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v22.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -101,6 +101,7 @@ def draw_map(data, max_dist):
             dist_m = int(dist_key)
             clock = item['clock']
             level_name = item.get('level', "無風")
+            
             level_info = WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])
             speed_val = level_info["val"]
             arrow_color = level_info["color"]
@@ -136,37 +137,37 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    initial_sidebar_state="collapsed" # 最初は閉じておく
+    initial_sidebar_state="expanded" # 最初は開いておく（モードを選ばせるため）
 )
 
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
-# --- モード選択と自動クローズ処理 ---
+# --- 自動サイドバー収納ロジック ---
 if 'last_mode' not in st.session_state:
     st.session_state['last_mode'] = None
 
+# サイドバー表示
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
-# モードが変わった瞬間を検知
+# モードが変わったらJavaScriptを実行してサイドバーを閉じる
 if mode != st.session_state['last_mode']:
     st.session_state['last_mode'] = mode
-    # JavaScriptを注入してサイドバーの「×ボタン」を強制クリックさせる
+    
+    # 左上のボタン(Collapse Button)をクリックするJS
     components.html("""
         <script>
-            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-            if (sidebar) {
-                const closeBtn = window.parent.document.querySelector('[data-testid="stSidebarCollapseButton"]');
-                if (closeBtn) {
-                    closeBtn.click();
-                }
+            // Streamlitのサイドバー開閉ボタンを探してクリック
+            const buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
+            if (buttons.length > 0) {
+                buttons[0].click();
             }
         </script>
     """, height=0, width=0)
-    # 少し待ってからリラン（画面更新）
+    
     time.sleep(0.1)
     st.rerun()
-# -----------------------------------
+# --------------------------------
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
