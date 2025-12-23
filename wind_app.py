@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v27.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v28.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -140,7 +140,7 @@ st.set_page_config(
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
-# --- 自動サイドバー収納ロジック ---
+# --- サイドバー制御ロジック (Ver.28) ---
 if 'last_mode' not in st.session_state:
     st.session_state['last_mode'] = None
 
@@ -149,45 +149,58 @@ mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "
 if mode != st.session_state['last_mode']:
     st.session_state['last_mode'] = mode
     
-    # 閉じるためのJavaScript (ハイブリッド版)
+    # 【改良点】
+    # 1. aria-expanded="true" (開いているか) を確認してからクリックする
+    # 2. 0.05秒間隔で高速チェックする
     js = """
     <script>
         var count = 0;
         var checkExist = setInterval(function() {
-           var success = false;
+           // サイドバー本体を取得
+           var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
            
-           // 作戦A: アイコン(keyboard_double_arrow_left)を探してクリック
-           var spans = window.parent.document.getElementsByTagName('span');
-           for (var i = 0; i < spans.length; i++) {
-               if (spans[i].innerText === 'keyboard_double_arrow_left') {
-                   spans[i].click();
-                   success = true;
-                   break;
+           if (sidebar) {
+               // サイドバーが開いているかチェック (aria-expandedがtrueなら開いている)
+               var isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
+               
+               if (isExpanded) {
+                   // 開いている時だけボタンを探して押す
+                   // アイコン(keyboard_double_arrow_left)を優先して探す
+                   var spans = window.parent.document.getElementsByTagName('span');
+                   var clicked = false;
+                   
+                   for (var i = 0; i < spans.length; i++) {
+                       if (spans[i].innerText === 'keyboard_double_arrow_left') {
+                           spans[i].click();
+                           clicked = true;
+                           break;
+                       }
+                   }
+                   
+                   // アイコンがなければボタンIDを探す
+                   if (!clicked) {
+                       var buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
+                       if (buttons.length > 0) {
+                           buttons[0].click();
+                       }
+                   }
+                   
+                   clearInterval(checkExist); // 押したら終了
+               } else {
+                   // すでに閉じているなら何もしないで終了
+                   clearInterval(checkExist);
                }
-           }
-           
-           // 作戦B: もしアイコンがダメなら、ボタンIDを探してクリック
-           if (!success) {
-               var buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
-               if (buttons.length > 0) {
-                   buttons[0].click();
-                   success = true;
-               }
-           }
-
-           if (success) {
-               clearInterval(checkExist);
            }
            
            count++;
-           if (count > 20) { clearInterval(checkExist); }
-        }, 100);
+           if (count > 40) { clearInterval(checkExist); } // 2秒経ったら諦める
+        }, 50); // 0.05秒ごとにチェック
     </script>
     """
     components.html(js, height=0, width=0)
     
-    # 【重要】Pilotモードの重い処理が始まる前に、ここで少し待ってJSを完了させる
-    time.sleep(0.5)
+    # JS実行時間を確保
+    time.sleep(0.3)
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
