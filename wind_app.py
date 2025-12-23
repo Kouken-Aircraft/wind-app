@@ -16,7 +16,7 @@ DATA_FILE = os.path.join(BASE_DIR, "wind_data_v33.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
-REFRESH_RATE = 2
+REFRESH_RATE = 3
 PAD_X = 60
 PAD_Y = 80
 
@@ -250,3 +250,4 @@ elif mode == "Settings (Config)":
             st.success("全てのデータを削除しました。")
             time.sleep(1)
             st.rerun()
+
