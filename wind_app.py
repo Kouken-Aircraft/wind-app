@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v28.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v29.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -140,67 +140,52 @@ st.set_page_config(
 config = load_config()
 MAX_DISTANCE = config["max_distance"]
 
-# --- サイドバー制御ロジック (Ver.28) ---
-if 'last_mode' not in st.session_state:
-    st.session_state['last_mode'] = None
-
+# モード選択
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
-if mode != st.session_state['last_mode']:
-    st.session_state['last_mode'] = mode
-    
-    # 【改良点】
-    # 1. aria-expanded="true" (開いているか) を確認してからクリックする
-    # 2. 0.05秒間隔で高速チェックする
-    js = """
-    <script>
-        var count = 0;
-        var checkExist = setInterval(function() {
-           // サイドバー本体を取得
-           var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+# =======================================================
+# 🔥 【修正版】常時実行される自動クローズ処理
+# =======================================================
+# モード変更の有無にかかわらず、画面が読み込まれるたびに実行されます。
+# これにより、Pilotモードの自動更新時でもサイドバーが閉じた状態を維持します。
+js = """
+<script>
+    var count = 0;
+    // 0.1秒ごとにチェック (計2秒間)
+    var checkExist = setInterval(function() {
+       // サイドバーが開いているかチェック
+       var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+       if (sidebar && sidebar.getAttribute('aria-expanded') === 'true') {
            
-           if (sidebar) {
-               // サイドバーが開いているかチェック (aria-expandedがtrueなら開いている)
-               var isExpanded = sidebar.getAttribute('aria-expanded') === 'true';
-               
-               if (isExpanded) {
-                   // 開いている時だけボタンを探して押す
-                   // アイコン(keyboard_double_arrow_left)を優先して探す
-                   var spans = window.parent.document.getElementsByTagName('span');
-                   var clicked = false;
-                   
-                   for (var i = 0; i < spans.length; i++) {
-                       if (spans[i].innerText === 'keyboard_double_arrow_left') {
-                           spans[i].click();
-                           clicked = true;
-                           break;
-                       }
-                   }
-                   
-                   // アイコンがなければボタンIDを探す
-                   if (!clicked) {
-                       var buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
-                       if (buttons.length > 0) {
-                           buttons[0].click();
-                       }
-                   }
-                   
-                   clearInterval(checkExist); // 押したら終了
-               } else {
-                   // すでに閉じているなら何もしないで終了
-                   clearInterval(checkExist);
+           // 開いていたら、アイコンを探してクリック
+           var spans = window.parent.document.getElementsByTagName('span');
+           var clicked = false;
+           for (var i = 0; i < spans.length; i++) {
+               if (spans[i].innerText === 'keyboard_double_arrow_left') {
+                   spans[i].click();
+                   clicked = true;
+                   break;
                }
            }
            
-           count++;
-           if (count > 40) { clearInterval(checkExist); } // 2秒経ったら諦める
-        }, 50); // 0.05秒ごとにチェック
-    </script>
-    """
-    components.html(js, height=0, width=0)
-    
-    # JS実行時間を確保
-    time.sleep(0.3)
+           // アイコンがなければボタンIDでクリック
+           if (!clicked) {
+               var buttons = window.parent.document.querySelectorAll('[data-testid="stSidebarCollapseButton"]');
+               if (buttons.length > 0) {
+                   buttons[0].click();
+               }
+           }
+           clearInterval(checkExist);
+       }
+       
+       count++;
+       if (count > 20) { clearInterval(checkExist); }
+    }, 100);
+</script>
+"""
+components.html(js, height=0, width=0)
+# =======================================================
+
 
 # ----------------------------------------------------
 # ✈️ PILOT MODE
