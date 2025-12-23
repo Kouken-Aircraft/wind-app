@@ -2,6 +2,8 @@ import streamlit as st
 import json
 import os
 import time
+# 【追加】日本時間を計算するためのライブラリ
+from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
@@ -10,7 +12,7 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v32.json")
+DATA_FILE = os.path.join(BASE_DIR, "wind_data_v33.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -141,7 +143,7 @@ MAX_DISTANCE = config["max_distance"]
 
 mode = st.sidebar.radio("Mode", ["Ground Crew (Input)", "Pilot (Map Monitor)", "Settings (Config)"])
 
-# ⚠️ 【重要】3つの専用エリア（座席）を確保
+# 3つの専用エリアを確保
 pilot_area = st.empty()
 crew_area = st.empty()
 settings_area = st.empty()
@@ -150,17 +152,20 @@ settings_area = st.empty()
 # ✈️ PILOT MODE
 # ----------------------------------------------------
 if mode == "Pilot (Map Monitor)":
-    # 🧹 他のエリアを強制的に掃除
     crew_area.empty()
     settings_area.empty()
     
-    # パイロット席に描画
     with pilot_area.container():
         st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
         all_data = load_all_data()
         fig = draw_map(all_data, MAX_DISTANCE)
         st.pyplot(fig, use_container_width=True)
-        st.caption(f"Update: {time.strftime('%H:%M:%S')}")
+        
+        # 【変更】日本時間 (JST) を計算して表示
+        JST = timezone(timedelta(hours=9))
+        now_jst = datetime.now(JST)
+        st.caption(f"Update: {now_jst.strftime('%H:%M:%S')} (JST)")
+        
         plt.close(fig)
 
     time.sleep(REFRESH_RATE)
@@ -170,11 +175,9 @@ if mode == "Pilot (Map Monitor)":
 # 🚩 GROUND CREW MODE
 # ----------------------------------------------------
 elif mode == "Ground Crew (Input)":
-    # 🧹 他のエリアを強制的に掃除
     pilot_area.empty()
     settings_area.empty()
     
-    # クルー席に描画
     with crew_area.container():
         st.markdown("## 🚩 Input Data")
         
@@ -224,11 +227,9 @@ elif mode == "Ground Crew (Input)":
 # ⚙️ SETTINGS MODE
 # ----------------------------------------------------
 elif mode == "Settings (Config)":
-    # 🧹 他のエリアを強制的に掃除
     pilot_area.empty()
     crew_area.empty()
 
-    # 設定席に描画
     with settings_area.container():
         st.markdown("## ⚙️ Config")
         
