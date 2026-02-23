@@ -11,7 +11,6 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
 REFRESH_RATE = 2
@@ -30,26 +29,30 @@ WIND_LEVELS = {
 RUNS = ["1走目", "2走目", "3走目", "4走目", "5走目"]
 
 # ==========================================
-# 💾 関数群
+# 💾 関数群 (ファイル名も走目ごとに分ける)
 # ==========================================
-def load_config():
+def get_config_file(run_name):
+    return os.path.join(BASE_DIR, f"wind_config_{run_name}.json")
+
+def get_data_file(run_name):
+    return os.path.join(BASE_DIR, f"wind_data_{run_name}.json")
+
+def load_config(run_name):
     default_conf = {"max_distance": 600}
-    if not os.path.exists(CONFIG_FILE): return default_conf
+    c_file = get_config_file(run_name)
+    if not os.path.exists(c_file): return default_conf
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(c_file, "r", encoding="utf-8") as f:
             return json.load(f)
     except: return default_conf
 
-def save_config(max_distance):
+def save_config(run_name, max_distance):
     config = {"max_distance": max_distance}
+    c_file = get_config_file(run_name)
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(c_file, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
-
-# 【変更】フライトごとのファイル名を取得する関数
-def get_data_file(run_name):
-    return os.path.join(BASE_DIR, f"wind_data_{run_name}.json")
 
 def load_all_data(run_name):
     data_file = get_data_file(run_name)
@@ -148,11 +151,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-config = load_config()
-MAX_DISTANCE = config.get("max_distance", 600)
-
 # ----------------------------------------------
-# 🛫 フライト(Run) 選択
+# 🛫 フライト(Run) 選択を一番最初に処理する
 # ----------------------------------------------
 st.sidebar.markdown("### 🛫 フライト選択")
 if "current_run" not in st.session_state:
@@ -165,6 +165,10 @@ if selected_run != st.session_state["current_run"]:
 
 current_run = st.session_state["current_run"]
 st.sidebar.write("---")
+
+# 選択されたフライト専用の設定を読み込む
+config = load_config(current_run)
+MAX_DISTANCE = config.get("max_distance", 600)
 
 # ----------------------------------------------
 # 🔘 デカボタン式モード選択
@@ -191,7 +195,6 @@ for m in MODES:
 mode = st.session_state["current_mode"]
 # ----------------------------------------------
 
-
 pilot_area = st.empty()
 crew_area = st.empty()
 settings_area = st.empty()
@@ -206,7 +209,6 @@ if mode == "Pilot (Map Monitor)":
     with pilot_area.container():
         all_data = load_all_data(current_run)
         
-        # タイトルに何走目か表示
         st.markdown(f"### ✈️ Wind Monitor 【{current_run}】 ({MAX_DISTANCE}m)")
         
         fig = draw_map(all_data, MAX_DISTANCE)
@@ -228,7 +230,6 @@ elif mode == "Ground Crew (Input)":
     settings_area.empty()
     
     with crew_area.container():
-        # タイトルに何走目か表示して誤爆を防ぐ
         st.markdown(f"## 🚩 Input Data 【{current_run}】")
         
         default_dist = 0
@@ -236,7 +237,7 @@ elif mode == "Ground Crew (Input)":
             try: default_dist = int(st.query_params["dist"])
             except: default_dist = 0
 
-        my_dist = st.number_input("📍 現在位置 (m)", min_value=0, max_value=MAX_DISTANCE, step=50, value=default_dist)
+        my_dist = st.number_input(f"📍 現在位置 (m) ※最大{MAX_DISTANCE}m", min_value=0, max_value=MAX_DISTANCE, step=50, value=default_dist)
         if my_dist != default_dist: st.query_params["dist"] = str(my_dist)
         st.write("---")
         
@@ -282,12 +283,12 @@ elif mode == "Settings (Config)":
 
     with settings_area.container():
         st.markdown("## ⚙️ Config")
-        st.markdown("### 📏 滑走路設定 (共通)")
-        new_dist = st.number_input("滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
+        st.markdown(f"### 📏 滑走路設定 【{current_run}】")
+        new_dist = st.number_input(f"【{current_run}】の滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
         
         if st.button("長さを保存", type="primary"):
-            save_config(new_dist)
-            st.success("設定を保存しました！")
+            save_config(current_run, new_dist)
+            st.success(f"【{current_run}】の設定を保存しました！")
             time.sleep(1)
             st.rerun()
         
