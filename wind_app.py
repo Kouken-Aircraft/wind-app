@@ -11,7 +11,6 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "wind_data_v36.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "wind_config.json")
 BG_IMAGE_FILE = "runway.png" 
 
@@ -26,6 +25,9 @@ WIND_LEVELS = {
     "中風": {"val": 7.0, "color": "#FFC107",   "label": "MID"},   
     "強風": {"val": 10.0, "color": "#FF5252",  "label": "HIGH"}   
 }
+
+# 🛫 用意するフライト（走目）のリスト
+RUNS = ["1走目", "2走目", "3走目", "4走目", "5走目"]
 
 # ==========================================
 # 💾 関数群
@@ -45,32 +47,40 @@ def save_config(max_distance):
             json.dump(config, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
 
-def load_all_data():
-    if not os.path.exists(DATA_FILE): return {}
+# 【変更】フライトごとのファイル名を取得する関数
+def get_data_file(run_name):
+    return os.path.join(BASE_DIR, f"wind_data_{run_name}.json")
+
+def load_all_data(run_name):
+    data_file = get_data_file(run_name)
+    if not os.path.exists(data_file): return {}
     try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+        with open(data_file, "r", encoding="utf-8") as f:
             return json.load(f)
     except: return {}
 
-def save_point_data(distance_m, clock_dir, level_name):
-    current_data = load_all_data()
+def save_point_data(run_name, distance_m, clock_dir, level_name):
+    current_data = load_all_data(run_name)
     dist_key = str(distance_m)
     current_data[dist_key] = {"clock": clock_dir, "level": level_name, "updated": time.time()}
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        data_file = get_data_file(run_name)
+        with open(data_file, "w", encoding="utf-8") as f:
             json.dump(current_data, f, ensure_ascii=False, indent=2)
     except: pass
 
-def delete_point_data(distance_m):
-    current_data = load_all_data()
+def delete_point_data(run_name, distance_m):
+    current_data = load_all_data(run_name)
     if str(distance_m) in current_data:
         del current_data[str(distance_m)]
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        data_file = get_data_file(run_name)
+        with open(data_file, "w", encoding="utf-8") as f:
             json.dump(current_data, f, ensure_ascii=False, indent=2)
 
-def clear_all_data():
+def clear_all_data(run_name):
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        data_file = get_data_file(run_name)
+        with open(data_file, "w", encoding="utf-8") as f:
             json.dump({}, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
 
@@ -142,12 +152,27 @@ config = load_config()
 MAX_DISTANCE = config.get("max_distance", 600)
 
 # ----------------------------------------------
+# 🛫 フライト(Run) 選択
+# ----------------------------------------------
+st.sidebar.markdown("### 🛫 フライト選択")
+if "current_run" not in st.session_state:
+    st.session_state["current_run"] = RUNS[0]
+
+selected_run = st.sidebar.selectbox("記録・表示するフライト", RUNS, index=RUNS.index(st.session_state["current_run"]))
+if selected_run != st.session_state["current_run"]:
+    st.session_state["current_run"] = selected_run
+    st.rerun()
+
+current_run = st.session_state["current_run"]
+st.sidebar.write("---")
+
+# ----------------------------------------------
 # 🔘 デカボタン式モード選択
 # ----------------------------------------------
 if "current_mode" not in st.session_state:
     st.session_state["current_mode"] = "Ground Crew (Input)" 
 
-st.sidebar.markdown("### 🔀 Mode Selection")
+st.sidebar.markdown("### 🔀 モード選択")
 
 MODES = [
     "Ground Crew (Input)",
@@ -179,9 +204,10 @@ if mode == "Pilot (Map Monitor)":
     settings_area.empty()
     
     with pilot_area.container():
-        all_data = load_all_data()
+        all_data = load_all_data(current_run)
         
-        st.markdown(f"### ✈️ Wind Monitor ({MAX_DISTANCE}m)")
+        # タイトルに何走目か表示
+        st.markdown(f"### ✈️ Wind Monitor 【{current_run}】 ({MAX_DISTANCE}m)")
         
         fig = draw_map(all_data, MAX_DISTANCE)
         st.pyplot(fig, use_container_width=True)
@@ -202,7 +228,8 @@ elif mode == "Ground Crew (Input)":
     settings_area.empty()
     
     with crew_area.container():
-        st.markdown("## 🚩 Input Data")
+        # タイトルに何走目か表示して誤爆を防ぐ
+        st.markdown(f"## 🚩 Input Data 【{current_run}】")
         
         default_dist = 0
         if "dist" in st.query_params:
@@ -213,9 +240,9 @@ elif mode == "Ground Crew (Input)":
         if my_dist != default_dist: st.query_params["dist"] = str(my_dist)
         st.write("---")
         
-        all_data = load_all_data()
+        all_data = load_all_data(current_run)
         current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風"})
-        st.info(f"送信データ: {my_dist}m = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
+        st.info(f"送信先: 【{current_run}】の {my_dist}m = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
 
         st.write("### ① 風向き (時計)")
         clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
@@ -226,7 +253,7 @@ elif mode == "Ground Crew (Input)":
                 with cols[j]:
                     btn_type = "primary" if current_val['clock'] == hour else "secondary"
                     if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
-                        save_point_data(my_dist, hour, current_val['level'])
+                        save_point_data(current_run, my_dist, hour, current_val['level'])
                         st.rerun()
 
         st.write("---")
@@ -238,12 +265,12 @@ elif mode == "Ground Crew (Input)":
                 is_selected = (current_val['level'] == lvl)
                 btn_type = "primary" if is_selected else "secondary"
                 if st.button(lvl, key=f"lvl_{i}", type=btn_type, use_container_width=True):
-                    save_point_data(my_dist, current_val['clock'], lvl)
+                    save_point_data(current_run, my_dist, current_val['clock'], lvl)
                     st.rerun()
                     
         st.write("")
-        if st.button("🗑️ データ削除", type="secondary"):
-            delete_point_data(my_dist)
+        if st.button("🗑️ この地点のデータを削除", type="secondary"):
+            delete_point_data(current_run, my_dist)
             st.rerun()
 
 # ----------------------------------------------------
@@ -255,7 +282,7 @@ elif mode == "Settings (Config)":
 
     with settings_area.container():
         st.markdown("## ⚙️ Config")
-        st.markdown("### 📏 滑走路設定")
+        st.markdown("### 📏 滑走路設定 (共通)")
         new_dist = st.number_input("滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
         
         if st.button("長さを保存", type="primary"):
@@ -265,10 +292,10 @@ elif mode == "Settings (Config)":
             st.rerun()
         
         st.write("---")
-        st.markdown("### 🗑️ データ管理")
-        st.warning("登録されている全ての風データを削除します。元に戻せません。")
-        if st.button("全ての風データを削除する"):
-            clear_all_data()
-            st.success("全てのデータを削除しました。")
+        st.markdown(f"### 🗑️ データ管理 【{current_run}】")
+        st.warning(f"現在選択中の「{current_run}」の風データをすべて削除します。")
+        if st.button(f"「{current_run}」をクリアする"):
+            clear_all_data(current_run)
+            st.success(f"{current_run} のデータを削除しました。")
             time.sleep(1)
             st.rerun()
