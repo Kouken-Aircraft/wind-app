@@ -323,6 +323,25 @@ elif mode == "Settings (Config)":
             st.rerun()
         
         st.write("---")
+        
+        # 🌟 ここに追加：ダウンロードボタン 🌟
+        st.markdown(f"### 📥 データ取り出し 【{current_run}】")
+        data_file = get_data_file(current_run)
+        if os.path.exists(data_file):
+            with open(data_file, "r", encoding="utf-8") as f:
+                json_string = f.read()
+            st.download_button(
+                label=f"💾 {current_run}のデータをダウンロード (JSON)",
+                data=json_string,
+                file_name=f"wind_data_{current_run}.json",
+                mime="application/json",
+                type="primary"
+            )
+        else:
+            st.info("まだ保存されたデータがありません。")
+
+        st.write("---")
+        
         st.markdown(f"### 🗑️ データ管理 【{current_run}】")
         st.warning(f"現在選択中の「{current_run}」の風データをすべて削除します。")
         if st.button(f"「{current_run}」をクリアする"):
