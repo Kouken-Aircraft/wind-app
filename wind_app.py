@@ -12,7 +12,6 @@ import numpy as np
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BG_IMAGE_FILE = "runway.png" 
-# 【追加】全員で「今の走目」を共有するためのファイル
 GLOBAL_CONFIG_FILE = os.path.join(BASE_DIR, "wind_global.json") 
 
 REFRESH_RATE = 2
@@ -27,13 +26,11 @@ WIND_LEVELS = {
     "強風": {"val": 10.0, "color": "#FF5252",  "label": "HIGH"}   
 }
 
-# 🛫 用意するフライト（走目）のリスト
 RUNS = ["1走目", "2走目", "3走目", "4走目", "5走目"]
 
 # ==========================================
 # 💾 関数群
 # ==========================================
-# 【追加】全体設定（今の走目）を読み込む
 def load_global_config():
     if not os.path.exists(GLOBAL_CONFIG_FILE): return {"current_run": RUNS[0]}
     try:
@@ -41,7 +38,6 @@ def load_global_config():
             return json.load(f)
     except: return {"current_run": RUNS[0]}
 
-# 【追加】全体設定（今の走目）を保存して全員に知らせる
 def save_global_config(run_name):
     try:
         with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -169,34 +165,29 @@ st.set_page_config(
 )
 
 # ----------------------------------------------
-# 🛫 フライト(Run) 選択 【全体シンクロ処理】
+# 🛫 フライト(Run) 選択
 # ----------------------------------------------
 st.sidebar.markdown("### 🛫 フライト選択")
 
-# 1. 全員で共有している「現在の走目」をファイルから読み込む
 global_config = load_global_config()
 global_run = global_config.get("current_run", RUNS[0])
 
-# 2. 自分の画面の走目が、全体の走目と違っていたら強制的に合わせる
 if "current_run" not in st.session_state:
     st.session_state["current_run"] = global_run
 elif st.session_state["current_run"] != global_run:
     st.session_state["current_run"] = global_run
-    st.rerun() # 画面をリロードして新しい走目に切り替える
+    st.rerun()
 
-# 3. 画面上のセレクトボックス
 selected_run = st.sidebar.selectbox("記録・表示するフライト", RUNS, index=RUNS.index(st.session_state["current_run"]))
 
-# 4. 誰かがセレクトボックスを変更したら、全体ファイルに書き込む
 if selected_run != st.session_state["current_run"]:
     st.session_state["current_run"] = selected_run
-    save_global_config(selected_run) # 全員に知らせる！
+    save_global_config(selected_run)
     st.rerun()
 
 current_run = st.session_state["current_run"]
 st.sidebar.write("---")
 
-# 選択されたフライト専用の設定を読み込む
 config = load_config(current_run)
 MAX_DISTANCE = config.get("max_distance", 600)
 
@@ -324,21 +315,44 @@ elif mode == "Settings (Config)":
         
         st.write("---")
         
-        # 🌟 ここに追加：ダウンロードボタン 🌟
-        st.markdown(f"### 📥 データ取り出し 【{current_run}】")
+        # 🌟 データダウンロード機能 🌟
+        st.markdown(f"### 📥 データのダウンロード (エクスポート)")
         data_file = get_data_file(current_run)
         if os.path.exists(data_file):
             with open(data_file, "r", encoding="utf-8") as f:
                 json_string = f.read()
             st.download_button(
-                label=f"💾 {current_run}のデータをダウンロード (JSON)",
+                label=f"💾 {current_run} のデータを保存 (JSON)",
                 data=json_string,
                 file_name=f"wind_data_{current_run}.json",
-                mime="application/json",
-                type="primary"
+                mime="application/json"
             )
         else:
-            st.info("まだ保存されたデータがありません。")
+            st.info("保存できるデータがまだありません。")
+
+        st.write("---")
+        
+        # 🌟 データアップロード機能 🌟
+        st.markdown(f"### 📤 データのアップロード (インポート)")
+        st.caption(f"手元にあるJSONファイルを読み込ませて、【{current_run}】の地図に表示します。")
+        
+        uploaded_file = st.file_uploader("ファイルを選択してください", type=["json"])
+        
+        if uploaded_file is not None:
+            if st.button("このファイルで上書きする", type="primary"):
+                try:
+                    # アップロードされたファイルを読み込む
+                    uploaded_data = json.load(uploaded_file)
+                    
+                    # 今の走目のファイルとして保存（上書き）する
+                    with open(data_file, "w", encoding="utf-8") as f:
+                        json.dump(uploaded_data, f, ensure_ascii=False, indent=2)
+                        
+                    st.success(f"✅ {current_run} にデータを読み込みました！")
+                    time.sleep(1.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 読み込みエラー: 正しいJSONファイルではありません。({e})")
 
         st.write("---")
         
