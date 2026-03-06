@@ -10,6 +10,9 @@ import numpy as np
 # ==========================================
 # ⚙️ 設定
 # ==========================================
+# 🌟 【新規追加】チーム専用のパスワード（合言葉）
+TEAM_PASSWORD = "flight2024"
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BG_IMAGE_FILE = "runway.png" 
 GLOBAL_CONFIG_FILE = os.path.join(BASE_DIR, "wind_global.json") 
@@ -163,6 +166,36 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded"
 )
+
+# ----------------------------------------------
+# 🔒 パスワード（ログイン）処理
+# ----------------------------------------------
+# セッションに「認証済みか」を保存する変数を作る
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+# まだ認証されていなければ、ログイン画面だけを表示してここで処理をストップする
+if not st.session_state["authenticated"]:
+    st.markdown("## 🔒 チーム専用アクセス")
+    st.info("このアプリを利用するにはパスワードが必要です。")
+    
+    pwd_input = st.text_input("パスワードを入力", type="password")
+    
+    if st.button("ログイン", type="primary"):
+        if pwd_input == TEAM_PASSWORD:
+            st.session_state["authenticated"] = True
+            st.success("ログイン成功！アプリを起動します...")
+            time.sleep(1)
+            st.rerun()
+        else:
+            st.error("❌ パスワードが違います")
+            
+    # 【重要】認証されていない場合はこれより下のコードを実行させない！
+    st.stop()
+
+# ==========================================
+# （ここから下はログイン成功した人だけが見れる）
+# ==========================================
 
 # ----------------------------------------------
 # 🛫 フライト(Run) 選択
@@ -354,7 +387,6 @@ elif mode == "Settings (Config)":
 
         st.write("---")
         
-        # 🌟 個別データ削除 🌟
         st.markdown(f"### 🗑️ 個別データ削除 【{current_run}】")
         st.warning(f"現在選択中の「{current_run}」の風データのみを削除します。")
         if st.button(f"「{current_run}」をクリアする"):
@@ -365,13 +397,11 @@ elif mode == "Settings (Config)":
 
         st.write("---")
 
-        # 🌟 【新規追加】全データ一括削除 🌟
         st.markdown("### 💣 全データ一括初期化")
-        st.warning("記録されている**すべてのフライト（1走目〜5走目）**の風データを一括で削除します。この操作は元に戻せません。")
+        st.warning("記録されている**すべてのフライト（1走目〜10走目）**の風データを一括で削除します。この操作は元に戻せません。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
             for r in RUNS:
                 clear_all_data(r)
             st.success("すべてのフライトデータを完全に削除しました！")
             time.sleep(1.5)
             st.rerun()
-
