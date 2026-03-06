@@ -11,7 +11,7 @@ import numpy as np
 # ⚙️ 設定
 # ==========================================
 # 🌟 【新規追加】チーム専用のパスワード（合言葉）
-TEAM_PASSWORD = "flight2024"
+TEAM_PASSWORD = "いいかんじ"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BG_IMAGE_FILE = "runway.png" 
@@ -405,3 +405,4 @@ elif mode == "Settings (Config)":
             st.success("すべてのフライトデータを完全に削除しました！")
             time.sleep(1.5)
             st.rerun()
+
