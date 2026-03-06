@@ -315,40 +315,52 @@ elif mode == "Settings (Config)":
         
         st.write("---")
         
-        # 🌟 データダウンロード機能 🌟
+        # 🌟 データダウンロード機能（滑走路の長さもパックにする） 🌟
         st.markdown(f"### 📥 データのダウンロード (エクスポート)")
-        data_file = get_data_file(current_run)
-        if os.path.exists(data_file):
-            with open(data_file, "r", encoding="utf-8") as f:
-                json_string = f.read()
-            st.download_button(
-                label=f"💾 {current_run} のデータを保存 (JSON)",
-                data=json_string,
-                file_name=f"wind_data_{current_run}.json",
-                mime="application/json"
-            )
-        else:
-            st.info("保存できるデータがまだありません。")
+        current_data = load_all_data(current_run)
+        
+        # 保存用に「長さ」と「風データ」を1つにまとめる
+        export_bundle = {
+            "max_distance": MAX_DISTANCE,
+            "wind_data": current_data
+        }
+        
+        json_string = json.dumps(export_bundle, ensure_ascii=False, indent=2)
+        
+        st.download_button(
+            label=f"💾 {current_run} のデータを保存 (JSON)",
+            data=json_string,
+            file_name=f"wind_data_{current_run}.json",
+            mime="application/json"
+        )
 
         st.write("---")
         
-        # 🌟 データアップロード機能 🌟
+        # 🌟 データアップロード機能（滑走路の長さも復元する） 🌟
         st.markdown(f"### 📤 データのアップロード (インポート)")
-        st.caption(f"手元にあるJSONファイルを読み込ませて、【{current_run}】の地図に表示します。")
+        st.caption(f"手元にあるJSONファイルを読み込ませて、【{current_run}】の地図と設定を上書きします。")
         
         uploaded_file = st.file_uploader("ファイルを選択してください", type=["json"])
         
         if uploaded_file is not None:
             if st.button("このファイルで上書きする", type="primary"):
                 try:
-                    # アップロードされたファイルを読み込む
                     uploaded_data = json.load(uploaded_file)
+                    data_file = get_data_file(current_run)
                     
-                    # 今の走目のファイルとして保存（上書き）する
-                    with open(data_file, "w", encoding="utf-8") as f:
-                        json.dump(uploaded_data, f, ensure_ascii=False, indent=2)
-                        
-                    st.success(f"✅ {current_run} にデータを読み込みました！")
+                    # 今回の「長さ入りフォーマット」の場合
+                    if "wind_data" in uploaded_data and "max_distance" in uploaded_data:
+                        # 1. 長さ（設定）を上書き保存
+                        save_config(current_run, uploaded_data["max_distance"])
+                        # 2. 風データを上書き保存
+                        with open(data_file, "w", encoding="utf-8") as f:
+                            json.dump(uploaded_data["wind_data"], f, ensure_ascii=False, indent=2)
+                    else:
+                        # 過去のバージョン（風データだけ）の場合の救済処置
+                        with open(data_file, "w", encoding="utf-8") as f:
+                            json.dump(uploaded_data, f, ensure_ascii=False, indent=2)
+                            
+                    st.success(f"✅ {current_run} にデータと設定を読み込みました！")
                     time.sleep(1.5)
                     st.rerun()
                 except Exception as e:
