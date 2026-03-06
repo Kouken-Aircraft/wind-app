@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import os
 import time
+import uuid  # 🌟【追加】入場券(セッションID)を作るためのライブラリ
 from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -10,12 +11,13 @@ import numpy as np
 # ==========================================
 # ⚙️ 設定
 # ==========================================
-# 🌟 【新規追加】チーム専用のパスワード（合言葉）
 TEAM_PASSWORD = "iikanzi"
+AUTH_DURATION_HOURS = 5  # 🌟【追加】何時間はパスワードなしでOKにするか
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BG_IMAGE_FILE = "runway.png" 
 GLOBAL_CONFIG_FILE = os.path.join(BASE_DIR, "wind_global.json") 
+AUTH_FILE = os.path.join(BASE_DIR, "wind_auth.json") # 🌟【追加】入場券の記録帳
 
 REFRESH_RATE = 2
 PAD_X = 60
@@ -34,6 +36,27 @@ RUNS = ["1走目", "2走目", "3走目", "4走目", "5走目", "6走目", "7走�
 # ==========================================
 # 💾 関数群
 # ==========================================
+# 🌟【追加】有効な入場券を読み込む関数
+def load_valid_tokens():
+    if not os.path.exists(AUTH_FILE): return {}
+    try:
+        with open(AUTH_FILE, "r", encoding="utf-8") as f:
+            tokens = json.load(f)
+            current_time = time.time()
+            # 期限切れの古いチケットはお掃除して、有効なものだけ残す
+            return {k: v for k, v in tokens.items() if v > current_time}
+    except: return {}
+
+# 🌟【追加】新しい入場券を発行して記録する関数
+def save_auth_token(token):
+    tokens = load_valid_tokens()
+    # 有効期限をセット（現在の時間 ＋ 指定した時間）
+    tokens[token] = time.time() + (AUTH_DURATION_HOURS * 3600)
+    try:
+        with open(AUTH_FILE, "w", encoding="utf-8") as f:
+            json.dump(tokens, f, ensure_ascii=False, indent=2)
+    except: pass
+
 def load_global_config():
     if not os.path.exists(GLOBAL_CONFIG_FILE): return {"current_run": RUNS[0]}
     try:
@@ -168,30 +191,43 @@ st.set_page_config(
 )
 
 # ----------------------------------------------
-# 🔒 パスワード（ログイン）処理
+# 🔒 パスワード（ログイン）処理 【記憶機能付き】
 # ----------------------------------------------
-# セッションに「認証済みか」を保存する変数を作る
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
-# まだ認証されていなければ、ログイン画面だけを表示してここで処理をストップする
+# URLに「入場券(session)」がくっついているかチェック
+url_token = st.query_params.get("session")
+
+# 入場券があれば、それが有効か確認する
+if url_token and not st.session_state["authenticated"]:
+    valid_tokens = load_valid_tokens()
+    if url_token in valid_tokens:
+        st.session_state["authenticated"] = True
+
+# 認証されていなければログイン画面を表示
 if not st.session_state["authenticated"]:
     st.markdown("## 🔒 チーム専用アクセス")
-    st.info("このアプリを利用するにはパスワードが必要です。")
+    st.info(f"このアプリを利用するにはパスワードが必要です。（一度入力すれば{AUTH_DURATION_HOURS}時間有効です）")
     
     pwd_input = st.text_input("パスワードを入力", type="password")
     
     if st.button("ログイン", type="primary"):
         if pwd_input == TEAM_PASSWORD:
             st.session_state["authenticated"] = True
+            
+            # 新しい入場券を発行してURLにくっつける
+            new_token = str(uuid.uuid4())
+            save_auth_token(new_token)
+            st.query_params["session"] = new_token
+            
             st.success("ログイン成功！アプリを起動します...")
             time.sleep(1)
             st.rerun()
         else:
             st.error("❌ パスワードが違います")
             
-    # 【重要】認証されていない場合はこれより下のコードを実行させない！
-    st.stop()
+    st.stop() # ログイン完了までこれより下は実行させない
 
 # ==========================================
 # （ここから下はログイン成功した人だけが見れる）
@@ -405,5 +441,3 @@ elif mode == "Settings (Config)":
             st.success("すべてのフライトデータを完全に削除しました！")
             time.sleep(1.5)
             st.rerun()
-
-
