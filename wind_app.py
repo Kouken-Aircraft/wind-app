@@ -339,7 +339,7 @@ elif mode == "Ground Crew (Input)":
         dist_display = f"{my_dist}m" if my_dist is not None else "【未入力】"
         st.info(f"送信先: 【{current_run}】の {dist_display} = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
 
-        st.write("### ① 風向き (時計)")
+        st.write("###  風向き (時計)")
         clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         for i in range(0, 12, 3):
             cols = st.columns(3)
@@ -356,7 +356,7 @@ elif mode == "Ground Crew (Input)":
                             st.rerun()
 
         st.write("---")
-        st.write("### ② 風の強さ")
+        st.write("###  風の強さ")
         cols = st.columns(5)
         levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
         for i, lvl in enumerate(levels_jp):
@@ -455,4 +455,5 @@ elif mode == "Settings (Config)":
             st.success("すべてのフライトデータを完全に削除しました！")
             time.sleep(1.5)
             st.rerun()
+
 
