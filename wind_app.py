@@ -325,7 +325,7 @@ elif mode == "Ground Crew (Input)":
             max_value=MAX_DISTANCE, 
             step=50, 
             value=default_dist,
-            placeholder="数値を入力（例: 100）"
+            placeholder="数値を入力"
         )
         
         if my_dist is not None and my_dist != default_dist: 
@@ -455,3 +455,4 @@ elif mode == "Settings (Config)":
             st.success("すべてのフライトデータを完全に削除しました！")
             time.sleep(1.5)
             st.rerun()
+
