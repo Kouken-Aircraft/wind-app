@@ -2,22 +2,23 @@ import streamlit as st
 import json
 import os
 import time
-import uuid  # 🌟【追加】入場券(セッションID)を作るためのライブラリ
+import uuid  
 from datetime import datetime, timedelta, timezone
-import matplotlib.pyplot as plt
+import matplotlib.subplots as plt
 import matplotlib.image as mpimg
 import numpy as np
+import matplotlib.pyplot as plt
 
 # ==========================================
 # ⚙️ 設定
 # ==========================================
 TEAM_PASSWORD = "iikanzi"
-AUTH_DURATION_HOURS = 5  # 🌟【追加】何時間はパスワードなしでOKにするか
+AUTH_DURATION_HOURS = 5  
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BG_IMAGE_FILE = "runway.png" 
 GLOBAL_CONFIG_FILE = os.path.join(BASE_DIR, "wind_global.json") 
-AUTH_FILE = os.path.join(BASE_DIR, "wind_auth.json") # 🌟【追加】入場券の記録帳
+AUTH_FILE = os.path.join(BASE_DIR, "wind_auth.json") 
 
 REFRESH_RATE = 2
 PAD_X = 60
@@ -36,21 +37,17 @@ RUNS = ["1走目", "2走目", "3走目", "4走目", "5走目", "6走目", "7走�
 # ==========================================
 # 💾 関数群
 # ==========================================
-# 🌟【追加】有効な入場券を読み込む関数
 def load_valid_tokens():
     if not os.path.exists(AUTH_FILE): return {}
     try:
         with open(AUTH_FILE, "r", encoding="utf-8") as f:
             tokens = json.load(f)
             current_time = time.time()
-            # 期限切れの古いチケットはお掃除して、有効なものだけ残す
             return {k: v for k, v in tokens.items() if v > current_time}
     except: return {}
 
-# 🌟【追加】新しい入場券を発行して記録する関数
 def save_auth_token(token):
     tokens = load_valid_tokens()
-    # 有効期限をセット（現在の時間 ＋ 指定した時間）
     tokens[token] = time.time() + (AUTH_DURATION_HOURS * 3600)
     try:
         with open(AUTH_FILE, "w", encoding="utf-8") as f:
@@ -191,26 +188,22 @@ st.set_page_config(
 )
 
 # ----------------------------------------------
-# 🔒 パスワード（ログイン）処理 【記憶＆Enterキー対応版】
+# 🔒 パスワード（ログイン）処理
 # ----------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
-# URLに「入場券(session)」がくっついているかチェック
 url_token = st.query_params.get("session")
 
-# 入場券があれば、それが有効か確認する
 if url_token and not st.session_state["authenticated"]:
     valid_tokens = load_valid_tokens()
     if url_token in valid_tokens:
         st.session_state["authenticated"] = True
 
-# 認証されていなければログイン画面を表示
 if not st.session_state["authenticated"]:
     st.markdown("## 🔒 チーム専用アクセス")
     st.info(f"このアプリを利用するにはパスワードが必要です。（一度入力すれば{AUTH_DURATION_HOURS}時間有効です）")
     
-    # 🌟【変更】フォーム（st.form）を使うことでEnterキーでの送信が可能になります
     with st.form(key="login_form"):
         pwd_input = st.text_input("パスワードを入力", type="password")
         submit_btn = st.form_submit_button("ログイン", type="primary")
@@ -218,19 +211,16 @@ if not st.session_state["authenticated"]:
         if submit_btn:
             if pwd_input == TEAM_PASSWORD:
                 st.session_state["authenticated"] = True
-                
-                # 新しい入場券を発行してURLにくっつける
                 new_token = str(uuid.uuid4())
                 save_auth_token(new_token)
                 st.query_params["session"] = new_token
-                
                 st.success("ログイン成功！アプリを起動します...")
                 time.sleep(1)
                 st.rerun()
             else:
                 st.error("❌ パスワードが違います")
                 
-    st.stop() # ログイン完了までこれより下は実行させない
+    st.stop() 
 
 # ==========================================
 # （ここから下はログイン成功した人だけが見れる）
@@ -325,47 +315,61 @@ elif mode == "Ground Crew (Input)":
     with crew_area.container():
         st.markdown(f"## 🚩 Input Data 【{current_run}】")
         
-        default_dist = 0
+        # 🌟【変更】初期値を None（空欄）にしました
+        default_dist = None
         if "dist" in st.query_params:
             try: default_dist = int(st.query_params["dist"])
-            except: default_dist = 0
+            except: default_dist = None
 
-        my_dist = st.number_input(f"📍 現在位置 (m) ※最大{MAX_DISTANCE}m", min_value=0, max_value=MAX_DISTANCE, step=50, value=default_dist)
-        if my_dist != default_dist: st.query_params["dist"] = str(my_dist)
-        st.write("---")
+        my_dist = st.number_input(
+            f"📍 現在位置 (m) ※最大{MAX_DISTANCE}m", 
+            min_value=0, 
+            max_value=MAX_DISTANCE, 
+            step=50, 
+            value=default_dist,
+            placeholder="数値を入力（例: 100）"
+        )
         
-        all_data = load_all_data(current_run)
-        current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風"})
-        st.info(f"送信先: 【{current_run}】の {my_dist}m = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
+        # 🌟【変更】現在位置が空欄のときはボタンを隠して警告を出す
+        if my_dist is not None:
+            if my_dist != default_dist: st.query_params["dist"] = str(my_dist)
+            st.write("---")
+            
+            all_data = load_all_data(current_run)
+            current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風"})
+            st.info(f"送信先: 【{current_run}】の {my_dist}m = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
 
-        st.write("### ① 風向き (時計)")
-        clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-        for i in range(0, 12, 3):
-            cols = st.columns(3)
-            chunk = clock_labels[i : i+3]
-            for j, hour in enumerate(chunk):
-                with cols[j]:
-                    btn_type = "primary" if current_val['clock'] == hour else "secondary"
-                    if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
-                        save_point_data(current_run, my_dist, hour, current_val['level'])
+            st.write("### ① 風向き (時計)")
+            clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+            for i in range(0, 12, 3):
+                cols = st.columns(3)
+                chunk = clock_labels[i : i+3]
+                for j, hour in enumerate(chunk):
+                    with cols[j]:
+                        btn_type = "primary" if current_val['clock'] == hour else "secondary"
+                        if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
+                            save_point_data(current_run, my_dist, hour, current_val['level'])
+                            st.rerun()
+
+            st.write("---")
+            st.write("### ② 風の強さ")
+            cols = st.columns(5)
+            levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
+            for i, lvl in enumerate(levels_jp):
+                with cols[i]:
+                    is_selected = (current_val['level'] == lvl)
+                    btn_type = "primary" if is_selected else "secondary"
+                    if st.button(lvl, key=f"lvl_{i}", type=btn_type, use_container_width=True):
+                        save_point_data(current_run, my_dist, current_val['clock'], lvl)
                         st.rerun()
-
-        st.write("---")
-        st.write("### ② 風の強さ")
-        cols = st.columns(5)
-        levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
-        for i, lvl in enumerate(levels_jp):
-            with cols[i]:
-                is_selected = (current_val['level'] == lvl)
-                btn_type = "primary" if is_selected else "secondary"
-                if st.button(lvl, key=f"lvl_{i}", type=btn_type, use_container_width=True):
-                    save_point_data(current_run, my_dist, current_val['clock'], lvl)
-                    st.rerun()
-                    
-        st.write("")
-        if st.button("🗑️ この地点のデータを削除", type="secondary"):
-            delete_point_data(current_run, my_dist)
-            st.rerun()
+                        
+            st.write("")
+            if st.button("🗑️ この地点のデータを削除", type="secondary"):
+                delete_point_data(current_run, my_dist)
+                st.rerun()
+        else:
+            st.write("---")
+            st.warning("⚠️ まずは上の入力欄に「現在位置 (m)」を入力してください。")
 
 # ----------------------------------------------------
 # ⚙️ SETTINGS MODE
