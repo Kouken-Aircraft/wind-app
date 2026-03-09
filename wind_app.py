@@ -191,7 +191,7 @@ st.set_page_config(
 )
 
 # ----------------------------------------------
-# 🔒 パスワード（ログイン）処理 【記憶機能付き】
+# 🔒 パスワード（ログイン）処理 【記憶＆Enterキー対応版】
 # ----------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -210,23 +210,26 @@ if not st.session_state["authenticated"]:
     st.markdown("## 🔒 チーム専用アクセス")
     st.info(f"このアプリを利用するにはパスワードが必要です。（一度入力すれば{AUTH_DURATION_HOURS}時間有効です）")
     
-    pwd_input = st.text_input("パスワードを入力", type="password")
-    
-    if st.button("ログイン", type="primary"):
-        if pwd_input == TEAM_PASSWORD:
-            st.session_state["authenticated"] = True
-            
-            # 新しい入場券を発行してURLにくっつける
-            new_token = str(uuid.uuid4())
-            save_auth_token(new_token)
-            st.query_params["session"] = new_token
-            
-            st.success("ログイン成功！アプリを起動します...")
-            time.sleep(1)
-            st.rerun()
-        else:
-            st.error("❌ パスワードが違います")
-            
+    # 🌟【変更】フォーム（st.form）を使うことでEnterキーでの送信が可能になります
+    with st.form(key="login_form"):
+        pwd_input = st.text_input("パスワードを入力", type="password")
+        submit_btn = st.form_submit_button("ログイン", type="primary")
+        
+        if submit_btn:
+            if pwd_input == TEAM_PASSWORD:
+                st.session_state["authenticated"] = True
+                
+                # 新しい入場券を発行してURLにくっつける
+                new_token = str(uuid.uuid4())
+                save_auth_token(new_token)
+                st.query_params["session"] = new_token
+                
+                st.success("ログイン成功！アプリを起動します...")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("❌ パスワードが違います")
+                
     st.stop() # ログイン完了までこれより下は実行させない
 
 # ==========================================
@@ -433,7 +436,6 @@ elif mode == "Settings (Config)":
 
         st.write("---")
 
-        # 🌟 ここを変更しました 🌟
         st.markdown("### 💣 全データ削除")
         st.warning("記録されている**すべてのフライト（1走目〜10走目）**の風データを一括で削除します。この操作は元に戻せません。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
