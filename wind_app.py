@@ -4,7 +4,7 @@ import os
 import time
 import uuid  
 from datetime import datetime, timedelta, timezone
-import matplotlib.pyplot as plt  # 🌟【修正】ここを直しました！
+import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 
@@ -187,7 +187,7 @@ st.set_page_config(
 )
 
 # ----------------------------------------------
-# 🔒 パスワード（ログイン）処理
+# 🔒 パスワード（ログイン）処理 
 # ----------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -328,45 +328,55 @@ elif mode == "Ground Crew (Input)":
             placeholder="数値を入力（例: 100）"
         )
         
-        if my_dist is not None:
-            if my_dist != default_dist: st.query_params["dist"] = str(my_dist)
-            st.write("---")
+        if my_dist is not None and my_dist != default_dist: 
+            st.query_params["dist"] = str(my_dist)
             
-            all_data = load_all_data(current_run)
-            current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風"})
-            st.info(f"送信先: 【{current_run}】の {my_dist}m = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
+        st.write("---")
+        
+        all_data = load_all_data(current_run)
+        current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風"})
+        
+        dist_display = f"{my_dist}m" if my_dist is not None else "【未入力】"
+        st.info(f"送信先: 【{current_run}】の {dist_display} = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
 
-            st.write("### ① 風向き (時計)")
-            clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-            for i in range(0, 12, 3):
-                cols = st.columns(3)
-                chunk = clock_labels[i : i+3]
-                for j, hour in enumerate(chunk):
-                    with cols[j]:
-                        btn_type = "primary" if current_val['clock'] == hour else "secondary"
-                        if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
+        st.write("### ① 風向き (時計)")
+        clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        for i in range(0, 12, 3):
+            cols = st.columns(3)
+            chunk = clock_labels[i : i+3]
+            for j, hour in enumerate(chunk):
+                with cols[j]:
+                    btn_type = "primary" if current_val['clock'] == hour else "secondary"
+                    if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
+                        # 🌟【変更】空欄で押した場合はエラーを出すだけで保存しない
+                        if my_dist is None:
+                            st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
+                        else:
                             save_point_data(current_run, my_dist, hour, current_val['level'])
                             st.rerun()
 
-            st.write("---")
-            st.write("### ② 風の強さ")
-            cols = st.columns(5)
-            levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
-            for i, lvl in enumerate(levels_jp):
-                with cols[i]:
-                    is_selected = (current_val['level'] == lvl)
-                    btn_type = "primary" if is_selected else "secondary"
-                    if st.button(lvl, key=f"lvl_{i}", type=btn_type, use_container_width=True):
+        st.write("---")
+        st.write("### ② 風の強さ")
+        cols = st.columns(5)
+        levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
+        for i, lvl in enumerate(levels_jp):
+            with cols[i]:
+                is_selected = (current_val['level'] == lvl)
+                btn_type = "primary" if is_selected else "secondary"
+                if st.button(lvl, key=f"lvl_{i}", type=btn_type, use_container_width=True):
+                    if my_dist is None:
+                        st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
+                    else:
                         save_point_data(current_run, my_dist, current_val['clock'], lvl)
                         st.rerun()
-                        
-            st.write("")
-            if st.button("🗑️ この地点のデータを削除", type="secondary"):
+                    
+        st.write("")
+        if st.button("🗑️ この地点のデータを削除", type="secondary"):
+            if my_dist is None:
+                st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
+            else:
                 delete_point_data(current_run, my_dist)
                 st.rerun()
-        else:
-            st.write("---")
-            st.warning("⚠️ まずは上の入力欄に「現在位置 (m)」を入力してください。")
 
 # ----------------------------------------------------
 # ⚙️ SETTINGS MODE
