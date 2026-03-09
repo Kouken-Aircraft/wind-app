@@ -433,7 +433,8 @@ elif mode == "Settings (Config)":
 
         st.write("---")
 
-        st.markdown("### 💣 全データ一括初期化")
+        # 🌟 ここを変更しました 🌟
+        st.markdown("### 💣 全データ削除")
         st.warning("記録されている**すべてのフライト（1走目〜10走目）**の風データを一括で削除します。この操作は元に戻せません。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
             for r in RUNS:
