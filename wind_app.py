@@ -4,10 +4,9 @@ import os
 import time
 import uuid  
 from datetime import datetime, timedelta, timezone
-import matplotlib.subplots as plt
+import matplotlib.pyplot as plt  # 🌟【修正】ここを直しました！
 import matplotlib.image as mpimg
 import numpy as np
-import matplotlib.pyplot as plt
 
 # ==========================================
 # ⚙️ 設定
@@ -315,7 +314,6 @@ elif mode == "Ground Crew (Input)":
     with crew_area.container():
         st.markdown(f"## 🚩 Input Data 【{current_run}】")
         
-        # 🌟【変更】初期値を None（空欄）にしました
         default_dist = None
         if "dist" in st.query_params:
             try: default_dist = int(st.query_params["dist"])
@@ -330,7 +328,6 @@ elif mode == "Ground Crew (Input)":
             placeholder="数値を入力（例: 100）"
         )
         
-        # 🌟【変更】現在位置が空欄のときはボタンを隠して警告を出す
         if my_dist is not None:
             if my_dist != default_dist: st.query_params["dist"] = str(my_dist)
             st.write("---")
