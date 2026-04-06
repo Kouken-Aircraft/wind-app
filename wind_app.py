@@ -225,8 +225,12 @@ if not st.session_state["authenticated"]:
 # （ここから下はログイン成功した人だけが見れる）
 # ==========================================
 
+# 最初は必ず「入力モード」にする
+if "current_mode" not in st.session_state:
+    st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)"
+
 # ----------------------------------------------
-# 🛫 フライト(Run) 選択 (サイドバー)
+# 🛫 サイドバー (走目選択 ＆ 設定メニュー)
 # ----------------------------------------------
 st.sidebar.markdown("### 🛫 どのフライト？ (走目選択)")
 
@@ -247,32 +251,38 @@ if selected_run != st.session_state["current_run"]:
     st.rerun()
 
 current_run = st.session_state["current_run"]
-st.sidebar.write("---")
-
 config = load_config(current_run)
 MAX_DISTANCE = config.get("max_distance", 600)
 
-# ----------------------------------------------
-# 🔀 モード選択 (🌟サイドバーからメイン画面トップへ移動！)
-# ----------------------------------------------
-# スマホで綺麗に横並びになるように短い名前にします
-SHORT_MODES = ["🚩 入力", "✈️ マップ", "⚙️ 設定"]
-FULL_MODES = {
-    "🚩 入力": "🚩 風の入力 (地上クルー用)",
-    "✈️ マップ": "✈️ マップを見る (全体監視用)",
-    "⚙️ 設定": "⚙️ アプリの設定 (管理者用)"
-}
+st.sidebar.write("---")
 
-selected_short_mode = st.radio(
-    "モード選択",
-    SHORT_MODES,
-    horizontal=True,
-    label_visibility="collapsed",
-    key="mode_radio"
-)
-st.write("---") # 見やすくするための区切り線
+# 🌟 設定ボタンをサイドバーに移動
+st.sidebar.markdown("### ⚙️ 管理者メニュー")
+is_settings = (st.session_state["current_mode"] == "⚙️ アプリの設定 (管理者用)")
+if st.sidebar.button("⚙️ アプリの設定", type="primary" if is_settings else "secondary", use_container_width=True):
+    st.session_state["current_mode"] = "⚙️ アプリの設定 (管理者用)"
+    st.rerun()
 
-mode = FULL_MODES[selected_short_mode]
+# ----------------------------------------------
+# 🔀 メイン画面トップ (デカボタンUIでのモード切替)
+# ----------------------------------------------
+# 横に2つ大きなボタンを並べます
+col1, col2 = st.columns(2)
+with col1:
+    is_input = (st.session_state["current_mode"] == "🚩 風の入力 (地上クルー用)")
+    if st.button("🚩 入力", type="primary" if is_input else "secondary", use_container_width=True):
+        st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)"
+        st.rerun()
+        
+with col2:
+    is_map = (st.session_state["current_mode"] == "✈️ マップを見る (全体監視用)")
+    if st.button("✈️ マップ", type="primary" if is_map else "secondary", use_container_width=True):
+        st.session_state["current_mode"] = "✈️ マップを見る (全体監視用)"
+        st.rerun()
+
+st.write("---")
+
+mode = st.session_state["current_mode"]
 
 # ----------------------------------------------
 
