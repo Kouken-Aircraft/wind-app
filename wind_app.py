@@ -226,7 +226,7 @@ if not st.session_state["authenticated"]:
 # ==========================================
 
 # ----------------------------------------------
-# 🛫 フライト(Run) 選択
+# 🛫 フライト(Run) 選択 (サイドバー)
 # ----------------------------------------------
 st.sidebar.markdown("### 🛫 どのフライト？ (走目選択)")
 
@@ -253,37 +253,27 @@ config = load_config(current_run)
 MAX_DISTANCE = config.get("max_distance", 600)
 
 # ----------------------------------------------
-# 🔀 モード選択 
+# 🔀 モード選択 (🌟サイドバーからメイン画面トップへ移動！)
 # ----------------------------------------------
-# 🌟【変更】初期画面を「風の入力 (地上クルー用)」に戻しました！
-if "current_mode" not in st.session_state:
-    st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)" 
-
-st.sidebar.markdown("### 🔀 なにする？ (モード選択)")
-
-# 🌟【変更】ホーム画面の選択肢を削除しました
-MODES = {
-    "🚩 風の入力 (地上クルー用)": "自分のいる場所の「風の強さと向き」をスマホから送信します。",
-    "✈️ マップを見る (全体監視用)": "みんなが入力した風のデータを地図でまとめて見ます。",
-    "⚙️ アプリの設定 (管理者用)": "滑走路の長さを変えたり、古いデータを削除したりします。"
+# スマホで綺麗に横並びになるように短い名前にします
+SHORT_MODES = ["🚩 入力", "✈️ マップ", "⚙️ 設定"]
+FULL_MODES = {
+    "🚩 入力": "🚩 風の入力 (地上クルー用)",
+    "✈️ マップ": "✈️ マップを見る (全体監視用)",
+    "⚙️ 設定": "⚙️ アプリの設定 (管理者用)"
 }
 
-for m_name, m_desc in MODES.items():
-    is_active = (st.session_state["current_mode"] == m_name)
-    btn_type = "primary" if is_active else "secondary"
-    
-    if st.sidebar.button(m_name, key=f"btn_mode_{m_name}", type=btn_type, use_container_width=True):
-        st.session_state["current_mode"] = m_name
-        st.rerun()
-        
-    if is_active:
-        st.sidebar.success(f"✅ **{m_desc}**")
-    else:
-        st.sidebar.caption(m_desc)
+selected_short_mode = st.radio(
+    "モード選択",
+    SHORT_MODES,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="mode_radio"
+)
+st.write("---") # 見やすくするための区切り線
 
-    st.sidebar.write("") 
+mode = FULL_MODES[selected_short_mode]
 
-mode = st.session_state["current_mode"]
 # ----------------------------------------------
 
 pilot_area = st.empty()
