@@ -225,7 +225,6 @@ if not st.session_state["authenticated"]:
 # （ここから下はログイン成功した人だけが見れる）
 # ==========================================
 
-# 最初は必ず「入力モード」にする
 if "current_mode" not in st.session_state:
     st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)"
 
@@ -256,7 +255,6 @@ MAX_DISTANCE = config.get("max_distance", 600)
 
 st.sidebar.write("---")
 
-# 🌟 設定ボタンをサイドバーに移動
 st.sidebar.markdown("### ⚙️ 管理者メニュー")
 is_settings = (st.session_state["current_mode"] == "⚙️ アプリの設定 (管理者用)")
 if st.sidebar.button("⚙️ アプリの設定", type="primary" if is_settings else "secondary", use_container_width=True):
@@ -266,7 +264,6 @@ if st.sidebar.button("⚙️ アプリの設定", type="primary" if is_settings 
 # ----------------------------------------------
 # 🔀 メイン画面トップ (デカボタンUIでのモード切替)
 # ----------------------------------------------
-# 横に2つ大きなボタンを並べます
 col1, col2 = st.columns(2)
 with col1:
     is_input = (st.session_state["current_mode"] == "🚩 風の入力 (地上クルー用)")
@@ -394,6 +391,9 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
     crew_area.empty()
 
     with settings_area.container():
+        # 🌟【追加】設定画面を開いたときに、サイドバーを閉じるように案内を出します
+        st.info("👈 スマホの場合、枠外をタップ（または左へスワイプ）してサイドバーを閉じてから操作してください。")
+        
         st.markdown("## ⚙️ Config")
         st.markdown(f"### 📏 滑走路設定 【{current_run}】")
         new_dist = st.number_input(f"【{current_run}】の滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
