@@ -183,7 +183,8 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    initial_sidebar_state="expanded"
+    # 🌟【変更】ここを "collapsed" にしました！最初からサイドバーが閉じます。
+    initial_sidebar_state="collapsed"
 )
 
 # ----------------------------------------------
