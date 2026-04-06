@@ -253,15 +253,17 @@ config = load_config(current_run)
 MAX_DISTANCE = config.get("max_distance", 600)
 
 # ----------------------------------------------
-# 🔀 モード選択 (🌟ここを超わかりやすく改良しました！)
+# 🔀 モード選択 
 # ----------------------------------------------
+# 🌟【変更】アプリを開いた直後の初期画面を「ホーム」にしました
 if "current_mode" not in st.session_state:
-    st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)" 
+    st.session_state["current_mode"] = "🏠 ホーム (メニュー)" 
 
 st.sidebar.markdown("### 🔀 なにする？ (モード選択)")
 
-# 日本語名と、その機能の解説をセットにします
+# 🌟【変更】ホーム画面をメニューに追加
 MODES = {
+    "🏠 ホーム (メニュー)": "最初に開く画面です。使いたい機能を選んでください。",
     "🚩 風の入力 (地上クルー用)": "自分のいる場所の「風の強さと向き」をスマホから送信します。",
     "✈️ マップを見る (全体監視用)": "みんなが入力した風のデータを地図でまとめて見ます。",
     "⚙️ アプリの設定 (管理者用)": "滑走路の長さを変えたり、古いデータを削除したりします。"
@@ -271,30 +273,66 @@ for m_name, m_desc in MODES.items():
     is_active = (st.session_state["current_mode"] == m_name)
     btn_type = "primary" if is_active else "secondary"
     
-    # 1. デカボタン
     if st.sidebar.button(m_name, key=f"btn_mode_{m_name}", type=btn_type, use_container_width=True):
         st.session_state["current_mode"] = m_name
         st.rerun()
         
-    # 2. ボタンのすぐ下に説明を表示（選択中は緑色の枠で強調！）
     if is_active:
         st.sidebar.success(f"✅ **{m_desc}**")
     else:
         st.sidebar.caption(m_desc)
 
-    st.sidebar.write("") # 少し隙間をあける
+    st.sidebar.write("") 
 
 mode = st.session_state["current_mode"]
 # ----------------------------------------------
 
+home_area = st.empty()
 pilot_area = st.empty()
 crew_area = st.empty()
 settings_area = st.empty()
 
 # ----------------------------------------------------
+# 🏠 HOME MODE (メニュー画面)
+# ----------------------------------------------------
+if mode == "🏠 ホーム (メニュー)":
+    pilot_area.empty()
+    crew_area.empty()
+    settings_area.empty()
+
+    with home_area.container():
+        st.markdown("## 🏠 メインメニュー")
+        st.info(f"現在の対象フライト: **【{current_run}】**")
+        st.write("あなたの役割に合わせて画面を選んでください。")
+        
+        st.write("---")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success("📱 **地上クルーの方**")
+            st.write("自分の担当位置の風向き・風速を入力します。")
+            if st.button("🚩 風を入力する", type="primary", use_container_width=True):
+                st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)"
+                st.rerun()
+
+        with col2:
+            st.info("💻 **パイロット・本部の方**")
+            st.write("全員が入力した風の状況をリアルタイムの地図で確認します。")
+            if st.button("✈️ マップを見る", type="primary", use_container_width=True):
+                st.session_state["current_mode"] = "✈️ マップを見る (全体監視用)"
+                st.rerun()
+
+        st.write("---")
+        st.caption("⚙️ 管理者用")
+        if st.button("アプリの設定・データ管理へ", use_container_width=True):
+            st.session_state["current_mode"] = "⚙️ アプリの設定 (管理者用)"
+            st.rerun()
+
+# ----------------------------------------------------
 # ✈️ PILOT MODE
 # ----------------------------------------------------
-if mode == "✈️ マップを見る (全体監視用)":
+elif mode == "✈️ マップを見る (全体監視用)":
+    home_area.empty()
     crew_area.empty()
     settings_area.empty()
     
@@ -318,6 +356,7 @@ if mode == "✈️ マップを見る (全体監視用)":
 # 🚩 GROUND CREW MODE
 # ----------------------------------------------------
 elif mode == "🚩 風の入力 (地上クルー用)":
+    home_area.empty()
     pilot_area.empty()
     settings_area.empty()
     
@@ -391,6 +430,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
 # ⚙️ SETTINGS MODE
 # ----------------------------------------------------
 elif mode == "⚙️ アプリの設定 (管理者用)":
+    home_area.empty()
     pilot_area.empty()
     crew_area.empty()
 
