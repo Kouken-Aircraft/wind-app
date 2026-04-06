@@ -391,9 +391,6 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
     crew_area.empty()
 
     with settings_area.container():
-        # 🌟【追加】設定画面を開いたときに、サイドバーを閉じるように案内を出します
-        st.info("👈 スマホの場合、枠外をタップ（または左へスワイプ）してサイドバーを閉じてから操作してください。")
-        
         st.markdown("## ⚙️ Config")
         st.markdown(f"### 📏 滑走路設定 【{current_run}】")
         new_dist = st.number_input(f"【{current_run}】の滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
