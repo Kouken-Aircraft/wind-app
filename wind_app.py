@@ -187,7 +187,7 @@ st.set_page_config(
 )
 
 # ----------------------------------------------
-# 🔒 パスワード（ログイン）処理 
+# 🔒 パスワード（ログイン）処理
 # ----------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -228,7 +228,7 @@ if not st.session_state["authenticated"]:
 # ----------------------------------------------
 # 🛫 フライト(Run) 選択
 # ----------------------------------------------
-st.sidebar.markdown("### 🛫 フライト選択")
+st.sidebar.markdown("### 🛫 どのフライト？ (走目選択)")
 
 global_config = load_global_config()
 global_run = global_config.get("current_run", RUNS[0])
@@ -239,7 +239,7 @@ elif st.session_state["current_run"] != global_run:
     st.session_state["current_run"] = global_run
     st.rerun()
 
-selected_run = st.sidebar.selectbox("記録・表示するフライト", RUNS, index=RUNS.index(st.session_state["current_run"]))
+selected_run = st.sidebar.selectbox("記録・表示するフライト", RUNS, index=RUNS.index(st.session_state["current_run"]), label_visibility="collapsed")
 
 if selected_run != st.session_state["current_run"]:
     st.session_state["current_run"] = selected_run
@@ -253,26 +253,36 @@ config = load_config(current_run)
 MAX_DISTANCE = config.get("max_distance", 600)
 
 # ----------------------------------------------
-# 🔘 デカボタン式モード選択
+# 🔀 モード選択 (🌟ここを超わかりやすく改良しました！)
 # ----------------------------------------------
 if "current_mode" not in st.session_state:
-    st.session_state["current_mode"] = "Ground Crew (Input)" 
+    st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)" 
 
-st.sidebar.markdown("### 🔀 モード選択")
+st.sidebar.markdown("### 🔀 なにする？ (モード選択)")
 
-MODES = [
-    "Ground Crew (Input)",
-    "Pilot (Map Monitor)",
-    "Settings (Config)"
-]
+# 日本語名と、その機能の解説をセットにします
+MODES = {
+    "🚩 風の入力 (地上クルー用)": "自分のいる場所の「風の強さと向き」をスマホから送信します。",
+    "✈️ マップを見る (全体監視用)": "みんなが入力した風のデータを地図でまとめて見ます。",
+    "⚙️ アプリの設定 (管理者用)": "滑走路の長さを変えたり、古いデータを削除したりします。"
+}
 
-for m in MODES:
-    is_active = (st.session_state["current_mode"] == m)
+for m_name, m_desc in MODES.items():
+    is_active = (st.session_state["current_mode"] == m_name)
     btn_type = "primary" if is_active else "secondary"
     
-    if st.sidebar.button(m, key=f"btn_mode_{m}", type=btn_type, use_container_width=True):
-        st.session_state["current_mode"] = m
+    # 1. デカボタン
+    if st.sidebar.button(m_name, key=f"btn_mode_{m_name}", type=btn_type, use_container_width=True):
+        st.session_state["current_mode"] = m_name
         st.rerun()
+        
+    # 2. ボタンのすぐ下に説明を表示（選択中は緑色の枠で強調！）
+    if is_active:
+        st.sidebar.success(f"✅ **{m_desc}**")
+    else:
+        st.sidebar.caption(m_desc)
+
+    st.sidebar.write("") # 少し隙間をあける
 
 mode = st.session_state["current_mode"]
 # ----------------------------------------------
@@ -284,7 +294,7 @@ settings_area = st.empty()
 # ----------------------------------------------------
 # ✈️ PILOT MODE
 # ----------------------------------------------------
-if mode == "Pilot (Map Monitor)":
+if mode == "✈️ マップを見る (全体監視用)":
     crew_area.empty()
     settings_area.empty()
     
@@ -307,7 +317,7 @@ if mode == "Pilot (Map Monitor)":
 # ----------------------------------------------------
 # 🚩 GROUND CREW MODE
 # ----------------------------------------------------
-elif mode == "Ground Crew (Input)":
+elif mode == "🚩 風の入力 (地上クルー用)":
     pilot_area.empty()
     settings_area.empty()
     
@@ -348,7 +358,6 @@ elif mode == "Ground Crew (Input)":
                 with cols[j]:
                     btn_type = "primary" if current_val['clock'] == hour else "secondary"
                     if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
-                        # 🌟【変更】空欄で押した場合はエラーを出すだけで保存しない
                         if my_dist is None:
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
                         else:
@@ -381,7 +390,7 @@ elif mode == "Ground Crew (Input)":
 # ----------------------------------------------------
 # ⚙️ SETTINGS MODE
 # ----------------------------------------------------
-elif mode == "Settings (Config)":
+elif mode == "⚙️ アプリの設定 (管理者用)":
     pilot_area.empty()
     crew_area.empty()
 
@@ -455,5 +464,3 @@ elif mode == "Settings (Config)":
             st.success("すべてのフライトデータを完全に削除しました！")
             time.sleep(1.5)
             st.rerun()
-
-
