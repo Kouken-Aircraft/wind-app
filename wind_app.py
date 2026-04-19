@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
-import matplotlib_fontja  # 🌟【変更】最新のPythonでも動く現代版・日本語化ライブラリ！
+import matplotlib_fontja  
 
 # ==========================================
 # ⚙️ 設定
@@ -24,7 +24,6 @@ REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
-# 🌟 マップの表示（label）も日本語のままです！
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "無風"},
     "微風": {"val": 2.0, "color": "#00BCD4",   "label": "微風"}, 
@@ -162,12 +161,21 @@ def draw_map(data, max_dist):
             if level_name != "無風" and speed_val > 0:
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
-                base_scale = 20.0 if max_dist <= 600 else 30.0
-                arrow_len = base_scale + (speed_val * 7.0)
-                U = np.cos(arrow_angle_rad) * arrow_len
-                V = np.sin(arrow_angle_rad) * arrow_len
-                ax.quiver(x, y, U, V, color=arrow_color, angles='xy', scale_units='xy', scale=1,
-                          width=0.025, headwidth=4, edgecolor='white', linewidth=1.5, zorder=4)
+                
+                # 🌟【修正ポイント】グラフの縮尺に影響されない絶対的な長さを計算
+                # 画面の横幅に対する割合(mag)を算出して矢印を引きます
+                mag = 0.12 + (speed_val * 0.015) 
+                
+                U = np.cos(arrow_angle_rad) * mag
+                V = np.sin(arrow_angle_rad) * mag
+                
+                # 🌟【修正ポイント】angles='uv', scale_units='width' に変更
+                ax.quiver(x, y, U, V, color=arrow_color, 
+                          angles='uv', scale_units='width', scale=1,
+                          width=0.015, headwidth=4, headlength=5, 
+                          edgecolor='white', linewidth=1.0, zorder=4)
+                          
+                # テキストの位置も少し調整（横幅固定なのでズレにくくなりました）
                 ax.text(x + 20, y, label_text, color='black', fontsize=12, fontweight='bold',
                         bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3', edgecolor='none'), zorder=5)
             else:
