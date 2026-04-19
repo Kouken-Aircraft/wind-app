@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
+import japanize_matplotlib  # 🌟【追加】文字化けを防ぐ魔法のライブラリ！
 
 # ==========================================
 # ⚙️ 設定
@@ -23,12 +24,13 @@ REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
+# 🌟【変更】label を日本語に直しました！
 WIND_LEVELS = {
-    "無風": {"val": 0.0, "color": "gray",      "label": "CALM"},
-    "微風": {"val": 2.0, "color": "#00BCD4",   "label": "LIGHT"}, 
-    "弱風": {"val": 4.5, "color": "#2962FF",   "label": "WEAK"},  
-    "中風": {"val": 7.0, "color": "#FFC107",   "label": "MID"},   
-    "強風": {"val": 10.0, "color": "#FF5252",  "label": "HIGH"}   
+    "無風": {"val": 0.0, "color": "gray",      "label": "無風"},
+    "微風": {"val": 2.0, "color": "#00BCD4",   "label": "微風"}, 
+    "弱風": {"val": 4.5, "color": "#2962FF",   "label": "弱風"},  
+    "中風": {"val": 7.0, "color": "#FFC107",   "label": "中風"},   
+    "強風": {"val": 10.0, "color": "#FF5252",  "label": "強風"}   
 }
 
 RUNS = ["1走目", "2走目", "3走目", "4走目", "5走目", "6走目", "7走目", "8走目", "9走目", "10走目"]
@@ -169,7 +171,7 @@ def draw_map(data, max_dist):
                 ax.text(x + 20, y, label_text, color='black', fontsize=12, fontweight='bold',
                         bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3', edgecolor='none'), zorder=5)
             else:
-                ax.text(x + 20, y, "CALM", color='gray', fontsize=11, fontweight='bold',
+                ax.text(x + 20, y, "無風", color='gray', fontsize=11, fontweight='bold',
                         bbox=dict(facecolor='white', alpha=0.8, boxstyle='round', edgecolor='none'), zorder=5)
         except: continue
     ax.axis('off')
@@ -419,11 +421,9 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
 
         st.write("---")
         
-        # 🌟【変更】ここが一括インポート対応部分です
         st.markdown(f"### 📤 データのアップロード (一括インポート対応)")
         st.caption("手元にあるJSONファイルを読み込ませて復元します。複数ファイルを一気に選んで「一括インポート」も可能です！\n※ファイル名（例: `wind_data_1走目.json`）から自動で走目を判定します。")
         
-        # accept_multiple_files=True で複数ファイル選択を許可
         uploaded_files = st.file_uploader("ファイルを選択してください", type=["json"], accept_multiple_files=True)
         
         if uploaded_files:
@@ -433,14 +433,12 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
                     try:
                         uploaded_data = json.load(uploaded_file)
                         
-                        # ファイル名から対象の走目を判定
                         file_name = uploaded_file.name
                         target_run = file_name.replace("wind_data_", "").replace(".json", "")
                         
-                        # ファイル名が規則通りでない場合の処理
                         if target_run not in RUNS:
                             if len(uploaded_files) == 1:
-                                target_run = current_run # 1ファイルだけなら、名前を無視して現在の画面の走目に入れる
+                                target_run = current_run 
                             else:
                                 st.warning(f"⚠️ {file_name} は走目が判定できないためスキップしました。")
                                 continue
