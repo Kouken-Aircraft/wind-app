@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
-import japanize_matplotlib  # 🌟【追加】文字化けを防ぐ魔法のライブラリ！
+import matplotlib_fontja  # 🌟【変更】最新のPythonでも動く現代版・日本語化ライブラリ！
 
 # ==========================================
 # ⚙️ 設定
@@ -24,7 +24,7 @@ REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
-# 🌟【変更】label を日本語に直しました！
+# 🌟 マップの表示（label）も日本語のままです！
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "無風"},
     "微風": {"val": 2.0, "color": "#00BCD4",   "label": "微風"}, 
