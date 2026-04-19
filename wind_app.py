@@ -172,7 +172,7 @@ def draw_map(data, max_dist):
                 # 🌟【修正ポイント】angles='uv', scale_units='width' に変更
                 ax.quiver(x, y, U, V, color=arrow_color, 
                           angles='uv', scale_units='width', scale=1,
-                          width=0.015, headwidth=4, headlength=5, 
+                          width=0.1, headwidth=4, headlength=5, 
                           edgecolor='white', linewidth=1.0, zorder=4)
                           
                 # テキストの位置も少し調整（横幅固定なのでズレにくくなりました）
