@@ -183,7 +183,6 @@ st.set_page_config(
     page_title="Wind Monitor", 
     page_icon="✈️", 
     layout="centered",
-    # 🌟【変更】ここを "collapsed" にしました！最初からサイドバーが閉じます。
     initial_sidebar_state="collapsed"
 )
 
@@ -420,26 +419,51 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
 
         st.write("---")
         
-        st.markdown(f"### 📤 データのアップロード (インポート)")
-        st.caption(f"手元にあるJSONファイルを読み込ませて、【{current_run}】の地図と設定を上書きします。")
-        uploaded_file = st.file_uploader("ファイルを選択してください", type=["json"])
-        if uploaded_file is not None:
-            if st.button("このファイルで上書きする", type="primary"):
-                try:
-                    uploaded_data = json.load(uploaded_file)
-                    data_file = get_data_file(current_run)
-                    if "wind_data" in uploaded_data and "max_distance" in uploaded_data:
-                        save_config(current_run, uploaded_data["max_distance"])
-                        with open(data_file, "w", encoding="utf-8") as f:
-                            json.dump(uploaded_data["wind_data"], f, ensure_ascii=False, indent=2)
-                    else:
-                        with open(data_file, "w", encoding="utf-8") as f:
-                            json.dump(uploaded_data, f, ensure_ascii=False, indent=2)
-                    st.success(f"✅ {current_run} にデータと設定を読み込みました！")
+        # 🌟【変更】ここが一括インポート対応部分です
+        st.markdown(f"### 📤 データのアップロード (一括インポート対応)")
+        st.caption("手元にあるJSONファイルを読み込ませて復元します。複数ファイルを一気に選んで「一括インポート」も可能です！\n※ファイル名（例: `wind_data_1走目.json`）から自動で走目を判定します。")
+        
+        # accept_multiple_files=True で複数ファイル選択を許可
+        uploaded_files = st.file_uploader("ファイルを選択してください", type=["json"], accept_multiple_files=True)
+        
+        if uploaded_files:
+            if st.button("選択したファイルで上書きする", type="primary"):
+                success_count = 0
+                for uploaded_file in uploaded_files:
+                    try:
+                        uploaded_data = json.load(uploaded_file)
+                        
+                        # ファイル名から対象の走目を判定
+                        file_name = uploaded_file.name
+                        target_run = file_name.replace("wind_data_", "").replace(".json", "")
+                        
+                        # ファイル名が規則通りでない場合の処理
+                        if target_run not in RUNS:
+                            if len(uploaded_files) == 1:
+                                target_run = current_run # 1ファイルだけなら、名前を無視して現在の画面の走目に入れる
+                            else:
+                                st.warning(f"⚠️ {file_name} は走目が判定できないためスキップしました。")
+                                continue
+                                
+                        data_file = get_data_file(target_run)
+                        
+                        if "wind_data" in uploaded_data and "max_distance" in uploaded_data:
+                            save_config(target_run, uploaded_data["max_distance"])
+                            with open(data_file, "w", encoding="utf-8") as f:
+                                json.dump(uploaded_data["wind_data"], f, ensure_ascii=False, indent=2)
+                        else:
+                            with open(data_file, "w", encoding="utf-8") as f:
+                                json.dump(uploaded_data, f, ensure_ascii=False, indent=2)
+                        
+                        success_count += 1
+                        
+                    except Exception as e:
+                        st.error(f"❌ {uploaded_file.name} 読み込みエラー: {e}")
+                        
+                if success_count > 0:
+                    st.success(f"✅ {success_count} 件のデータを読み込みました！")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"❌ 読み込みエラー: 正しいJSONファイルではありません。({e})")
 
         st.write("---")
         
