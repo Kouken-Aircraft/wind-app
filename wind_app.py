@@ -24,7 +24,6 @@ REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
-# 🌟【変更】数値を直接使うため、WIND_LEVELSは「判定の基準」として使います
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "無風"},
     "微風": {"val": 2.0, "color": "#00BCD4",   "label": "微風"}, 
@@ -33,7 +32,6 @@ WIND_LEVELS = {
     "強風": {"val": 10.0, "color": "#FF5252",  "label": "強風"}   
 }
 
-# 🌟【追加】入力された数値（m/s）からレベルを自動判定する関数
 def get_level_from_speed(speed):
     if speed <= 0.5: return "無風"
     elif speed <= 3.0: return "微風"
@@ -107,12 +105,10 @@ def load_all_data(run_name):
             return json.load(f)
     except: return {}
 
-# 🌟【変更】speed（数値）も保存できるように引数を追加
 def save_point_data(run_name, distance_m, clock_dir, level_name, speed_val=None):
     current_data = load_all_data(run_name)
     dist_key = str(distance_m)
     
-    # speed_valが指定されていなければ、レベルのデフォルト数値を使う（過去データ互換性のため）
     if speed_val is None:
         speed_val = WIND_LEVELS[level_name]["val"]
         
@@ -166,13 +162,11 @@ def draw_map(data, max_dist):
             clock = item['clock']
             level_name = item.get('level', "無風")
             
-            # 🌟【変更】保存されている実際の「speed」を優先して使う
             speed_val = item.get('speed', WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])["val"])
             
             level_info = WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])
             arrow_color = level_info["color"]
             
-            # マップ上に表示するテキストを「レベル名＋数値」に変更
             if speed_val > 0.5:
                 label_text = f"{level_name}({speed_val}m)"
             else:
@@ -186,7 +180,6 @@ def draw_map(data, max_dist):
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
                 
-                # 矢印の長さも実際の数値ベースで計算
                 mag = 0.12 + (speed_val * 0.015) 
                 
                 U = np.cos(arrow_angle_rad) * mag
@@ -371,7 +364,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         st.write("---")
         
         all_data = load_all_data(current_run)
-        # 🌟 初期値を設定
         current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風", "speed": 0.0})
         
         dist_display = f"{my_dist}m" if my_dist is not None else "【未入力】"
@@ -394,28 +386,27 @@ elif mode == "🚩 風の入力 (地上クルー用)":
 
         st.write("---")
         
-        # 🌟【大変更】風の強さをボタンから「スライダー」に変更しました！
         st.write("### ② 風の強さ (m/s)")
         
-        # 過去のデータに speed が無い場合はレベルの基準値を使う
         init_speed = current_val.get('speed', WIND_LEVELS[current_val['level']]["val"])
-        
+        # 🌟【変更】初期値が5.0を超えている場合は5.0に丸める
+        if init_speed > 5.0:
+            init_speed = 5.0
+            
         selected_speed = st.slider(
             "指でスライドして風速を設定", 
             min_value=0.0, 
-            max_value=15.0, 
+            # 🌟【変更】最大値を5.0m/sにしました
+            max_value=5.0, 
             value=float(init_speed), 
             step=0.5
         )
         
-        # 選択された数値から自動判定
         auto_level = get_level_from_speed(selected_speed)
         level_color = WIND_LEVELS[auto_level]["color"]
         
-        # 判定結果を目立たせる
         st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span>", unsafe_allow_html=True)
         
-        # 保存ボタン
         if st.button(f"📥 この風速({selected_speed}m/s)で記録する", type="primary", use_container_width=True):
             if my_dist is None:
                 st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
