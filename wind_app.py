@@ -32,11 +32,10 @@ WIND_LEVELS = {
     "強風": {"val": 10.0, "color": "#FF5252",  "label": "強風"}   
 }
 
-# 🌟【変更】ここを20走目まで増やしました！
 RUNS = [f"{i}走目" for i in range(1, 21)]
 
 # ==========================================
-# 💾 関数群
+#  関数群
 # ==========================================
 def load_valid_tokens():
     if not os.path.exists(AUTH_FILE): return {}
@@ -184,7 +183,7 @@ def draw_map(data, max_dist):
     return fig
 
 # ==========================================
-# 🚀 メイン処理
+# メイン処理
 # ==========================================
 st.set_page_config(
     page_title="Wind Monitor", 
@@ -194,7 +193,7 @@ st.set_page_config(
 )
 
 # ----------------------------------------------
-# 🔒 パスワード（ログイン）処理
+#  ログイン処理
 # ----------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -208,7 +207,7 @@ if url_token and not st.session_state["authenticated"]:
 
 if not st.session_state["authenticated"]:
     st.markdown("## 🔒 チーム専用アクセス")
-    st.info(f"このアプリを利用するにはパスワードが必要です。（一度入力すれば{AUTH_DURATION_HOURS}時間有効です）")
+    st.info(f"このアプリを利用するにはパスワードが必要です。")
     
     with st.form(key="login_form"):
         pwd_input = st.text_input("パスワードを入力", type="password")
@@ -269,7 +268,7 @@ if st.sidebar.button("⚙️ アプリの設定", type="primary" if is_settings 
     st.rerun()
 
 # ----------------------------------------------
-# 🔀 メイン画面トップ (デカボタンUIでのモード切替)
+# 🔀 メイン画面トップ
 # ----------------------------------------------
 col1, col2 = st.columns(2)
 with col1:
@@ -352,7 +351,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         dist_display = f"{my_dist}m" if my_dist is not None else "【未入力】"
         st.info(f"送信先: 【{current_run}】の {dist_display} = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
 
-        st.write("###  風向き (時計)")
+        st.write("###  風向き")
         clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         for i in range(0, 12, 3):
             cols = st.columns(3)
