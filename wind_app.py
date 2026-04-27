@@ -32,7 +32,8 @@ WIND_LEVELS = {
     "強風": {"val": 10.0, "color": "#FF5252",  "label": "強風"}   
 }
 
-RUNS = ["1走目", "2走目", "3走目", "4走目", "5走目", "6走目", "7走目", "8走目", "9走目", "10走目"]
+# 🌟【変更】ここを20走目まで増やしました！
+RUNS = [f"{i}走目" for i in range(1, 21)]
 
 # ==========================================
 # 💾 関数群
@@ -162,20 +163,16 @@ def draw_map(data, max_dist):
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
                 
-                # 🌟【修正ポイント】グラフの縮尺に影響されない絶対的な長さを計算
-                # 画面の横幅に対する割合(mag)を算出して矢印を引きます
                 mag = 0.12 + (speed_val * 0.015) 
                 
                 U = np.cos(arrow_angle_rad) * mag
                 V = np.sin(arrow_angle_rad) * mag
                 
-                # 🌟【修正ポイント】angles='uv', scale_units='width' に変更
                 ax.quiver(x, y, U, V, color=arrow_color, 
                           angles='uv', scale_units='width', scale=1,
                           width=0.025, headwidth=4, headlength=5, 
                           edgecolor='white', linewidth=1.0, zorder=4)
                           
-                # テキストの位置も少し調整（横幅固定なのでズレにくくなりました）
                 ax.text(x + 20, y, label_text, color='black', fontsize=12, fontweight='bold',
                         bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3', edgecolor='none'), zorder=5)
             else:
@@ -483,8 +480,9 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
 
         st.write("---")
 
+        # 🌟【変更】ここも「20走目」まで対応するようにメッセージを直しました
         st.markdown("### 💣 全データ削除")
-        st.warning("記録されている**すべてのフライト（1走目〜10走目）**の風データを一括で削除します。この操作は元に戻せません。")
+        st.warning("記録されている**すべてのフライト（1走目〜20走目）**の風データを一括で削除します。この操作は元に戻せません。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
             for r in RUNS:
                 clear_all_data(r)
