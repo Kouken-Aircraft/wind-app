@@ -61,17 +61,22 @@ def save_auth_token(token):
             json.dump(tokens, f, ensure_ascii=False, indent=2)
     except: pass
 
+# 🌟【変更】グローバル設定に入力方式（input_style）も保存・読み込みするようにしました
 def load_global_config():
-    if not os.path.exists(GLOBAL_CONFIG_FILE): return {"current_run": RUNS[0]}
+    default_config = {"current_run": RUNS[0], "input_style": "🔘 ボタン (素早く)"}
+    if not os.path.exists(GLOBAL_CONFIG_FILE): return default_config
     try:
         with open(GLOBAL_CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except: return {"current_run": RUNS[0]}
+            data = json.load(f)
+            if "input_style" not in data:
+                data["input_style"] = "🔘 ボタン (素早く)"
+            return data
+    except: return default_config
 
-def save_global_config(run_name):
+def save_global_config(run_name, input_style):
     try:
         with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump({"current_run": run_name}, f, ensure_ascii=False, indent=2)
+            json.dump({"current_run": run_name, "input_style": input_style}, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
 
 def get_config_file(run_name):
@@ -134,7 +139,8 @@ def clear_all_data(run_name):
             json.dump({}, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
 
-def draw_map(data, max_dist):
+# 🌟【変更】マップ描画関数に入力方式（input_style）を渡し、表示を切り替えます
+def draw_map(data, max_dist, input_style):
     fig_height = max(6, min(15, 10 * (max_dist / 600)))
     fig, ax = plt.subplots(figsize=(5, fig_height))
     ax.set_xlim(0 - PAD_X, 100 + PAD_X)
@@ -168,7 +174,11 @@ def draw_map(data, max_dist):
             arrow_color = level_info["color"]
             
             if speed_val > 0.5:
-                label_text = f"{level_name}({speed_val}m)"
+                # 🌟【変更】スライダー方式の時だけ、マップに数値を表示する
+                if "スライダー" in input_style:
+                    label_text = f"{level_name}({speed_val}m/s)"
+                else:
+                    label_text = f"{level_name}"
             else:
                 label_text = "無風"
 
@@ -259,6 +269,8 @@ st.sidebar.markdown("### 🛫 どのフライト？ (走目選択)")
 
 global_config = load_global_config()
 global_run = global_config.get("current_run", RUNS[0])
+# 🌟【追加】グローバルの入力方式を取得
+global_input_style = global_config.get("input_style", "🔘 ボタン (素早く)")
 
 if "current_run" not in st.session_state:
     st.session_state["current_run"] = global_run
@@ -270,7 +282,8 @@ selected_run = st.sidebar.selectbox("記録・表示するフライト", RUNS, i
 
 if selected_run != st.session_state["current_run"]:
     st.session_state["current_run"] = selected_run
-    save_global_config(selected_run)
+    # 走目を変更した時も入力方式を維持する
+    save_global_config(selected_run, global_input_style)
     st.rerun()
 
 current_run = st.session_state["current_run"]
@@ -323,7 +336,8 @@ if mode == "✈️ マップを見る (全体監視用)":
         
         st.markdown(f"### ✈️ Wind Monitor 【{current_run}】 ({MAX_DISTANCE}m)")
         
-        fig = draw_map(all_data, MAX_DISTANCE)
+        # 🌟【変更】マップ描画にグローバルの入力方式（input_style）を渡す
+        fig = draw_map(all_data, MAX_DISTANCE, global_input_style)
         st.pyplot(fig, use_container_width=True)
         
         JST = timezone(timedelta(hours=9))
@@ -386,35 +400,47 @@ elif mode == "🚩 風の入力 (地上クルー用)":
 
         st.write("---")
         
-        # 🌟【変更】ボタンを無くし、スライダー操作だけで即保存するようにしました！
-        st.write("### ② 風の強さ (m/s)")
+        # 🌟【変更】管理者画面の設定（global_input_style）に従ってUIを切り替える
+        st.write("### ② 風の強さ")
         
-        init_speed = current_val.get('speed', WIND_LEVELS[current_val['level']]["val"])
-        if init_speed > 5.0:
-            init_speed = 5.0
-            
-        # on_changeを使って、スライダーから指を離した瞬間に処理を走らせます
-        def on_speed_change():
-            if my_dist is not None:
-                new_speed = st.session_state["speed_slider"]
-                auto_level = get_level_from_speed(new_speed)
-                save_point_data(current_run, my_dist, current_val['clock'], auto_level, new_speed)
+        if "ボタン" in global_input_style:
+            cols = st.columns(5)
+            levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
+            for i, lvl in enumerate(levels_jp):
+                with cols[i]:
+                    is_selected = (current_val['level'] == lvl)
+                    btn_type = "primary" if is_selected else "secondary"
+                    if st.button(lvl, key=f"lvl_btn_{i}", type=btn_type, use_container_width=True):
+                        if my_dist is None:
+                            st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
+                        else:
+                            save_point_data(current_run, my_dist, current_val['clock'], lvl, WIND_LEVELS[lvl]["val"])
+                            st.rerun()
+        else:
+            # スライダー方式
+            init_speed = current_val.get('speed', WIND_LEVELS[current_val['level']]["val"])
+            if init_speed > 5.0:
+                init_speed = 5.0
+                
+            def on_speed_change():
+                if my_dist is not None:
+                    new_speed = st.session_state["speed_slider"]
+                    auto_level = get_level_from_speed(new_speed)
+                    save_point_data(current_run, my_dist, current_val['clock'], auto_level, new_speed)
 
-        selected_speed = st.slider(
-            "指でスライドして風速を設定", 
-            min_value=0.0, 
-            max_value=5.0, 
-            value=float(init_speed), 
-            step=0.5,
-            key="speed_slider",
-            on_change=on_speed_change  # 🌟 指を離した瞬間に上の関数が動いて保存！
-        )
-        
-        auto_level = get_level_from_speed(selected_speed)
-        level_color = WIND_LEVELS[auto_level]["color"]
-        
-        # 🌟 即保存されるので、確認用に「保存済み」の文字を出します
-        st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span>", unsafe_allow_html=True)
+            selected_speed = st.slider(
+                "指でスライドして風速を設定 (m/s)", 
+                min_value=0.0, 
+                max_value=5.0, 
+                value=float(init_speed), 
+                step=0.5,
+                key="speed_slider",
+                on_change=on_speed_change
+            )
+            
+            auto_level = get_level_from_speed(selected_speed)
+            level_color = WIND_LEVELS[auto_level]["color"]
+            st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span> (✓ 送信済み)", unsafe_allow_html=True)
                     
         st.write("---")
         if st.button("🗑️ この地点のデータを削除", type="secondary"):
@@ -432,6 +458,24 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
     crew_area.empty()
 
     with settings_area.container():
+        # 🌟【追加】グローバルな入力方式の設定を管理者画面に移動
+        st.markdown("## 🎛️ 全体の入力方式設定")
+        st.caption("ここで設定した入力方式は、すべての入力担当者（Ground Crew）の画面とマップの表示に適用されます。")
+        new_input_style = st.radio(
+            "風速の入力方式", 
+            ["🔘 ボタン (素早く)", "🎚️ スライダー (細かく)"], 
+            index=0 if "ボタン" in global_input_style else 1, 
+            horizontal=True
+        )
+        
+        if new_input_style != global_input_style:
+            save_global_config(current_run, new_input_style)
+            st.success("全員のアプリの入力方式を切り替えました！")
+            time.sleep(1)
+            st.rerun()
+
+        st.write("---")
+        
         st.markdown("## ⚙️ Config")
         st.markdown(f"### 📏 滑走路設定 【{current_run}】")
         new_dist = st.number_input(f"【{current_run}】の滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
