@@ -35,7 +35,7 @@ WIND_LEVELS = {
 RUNS = [f"{i}走目" for i in range(1, 21)]
 
 # ==========================================
-#  関数群
+# 💾 関数群
 # ==========================================
 def load_valid_tokens():
     if not os.path.exists(AUTH_FILE): return {}
@@ -183,7 +183,7 @@ def draw_map(data, max_dist):
     return fig
 
 # ==========================================
-# メイン処理
+# 🚀 メイン処理
 # ==========================================
 st.set_page_config(
     page_title="Wind Monitor", 
@@ -193,7 +193,7 @@ st.set_page_config(
 )
 
 # ----------------------------------------------
-#  ログイン処理
+# 🔒 パスワード（ログイン）処理
 # ----------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -268,17 +268,19 @@ if st.sidebar.button("⚙️ アプリの設定", type="primary" if is_settings 
     st.rerun()
 
 # ----------------------------------------------
-# 🔀 メイン画面トップ
+# 🔀 メイン画面トップ (デカボタンUIでのモード切替)
 # ----------------------------------------------
 col1, col2 = st.columns(2)
 with col1:
     is_input = (st.session_state["current_mode"] == "🚩 風の入力 (地上クルー用)")
+    # 🌟【変更】元のシンプルな名前に戻しました！
     if st.button("🚩 入力", type="primary" if is_input else "secondary", use_container_width=True):
         st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)"
         st.rerun()
         
 with col2:
     is_map = (st.session_state["current_mode"] == "✈️ マップを見る (全体監視用)")
+    # 🌟【変更】元のシンプルな名前に戻しました！
     if st.button("✈️ マップ", type="primary" if is_map else "secondary", use_container_width=True):
         st.session_state["current_mode"] = "✈️ マップを見る (全体監視用)"
         st.rerun()
@@ -479,7 +481,6 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
 
         st.write("---")
 
-        # 🌟【変更】ここも「20走目」まで対応するようにメッセージを直しました
         st.markdown("### 💣 全データ削除")
         st.warning("記録されている**すべてのフライト（1走目〜20走目）**の風データを一括で削除します。この操作は元に戻せません。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
