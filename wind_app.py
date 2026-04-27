@@ -26,17 +26,17 @@ PAD_Y = 80
 
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "無風"},
-    "微風": {"val": 2.0, "color": "#00BCD4",   "label": "微風"}, 
-    "弱風": {"val": 4.5, "color": "#2962FF",   "label": "弱風"},  
-    "中風": {"val": 7.0, "color": "#FFC107",   "label": "中風"},   
-    "強風": {"val": 10.0, "color": "#FF5252",  "label": "強風"}   
+    "微風": {"val": 1.0, "color": "#00BCD4",   "label": "微風"}, 
+    "弱風": {"val": 2.5, "color": "#2962FF",   "label": "弱風"},  
+    "中風": {"val": 3.5, "color": "#FFC107",   "label": "中風"},   
+    "強風": {"val": 4.5, "color": "#FF5252",  "label": "強風"}   
 }
 
 def get_level_from_speed(speed):
     if speed <= 0.5: return "無風"
-    elif speed <= 3.0: return "微風"
-    elif speed <= 6.0: return "弱風"
-    elif speed <= 9.0: return "中風"
+    elif speed <= 1.5: return "微風"
+    elif speed <= 3.0: return "弱風"
+    elif speed <= 4.0: return "中風"
     else: return "強風"
 
 RUNS = [f"{i}走目" for i in range(1, 21)]
@@ -180,7 +180,7 @@ def draw_map(data, max_dist):
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
                 
-                mag = 0.12 + (speed_val * 0.015) 
+                mag = 0.12 + (speed_val * 0.04) 
                 
                 U = np.cos(arrow_angle_rad) * mag
                 V = np.sin(arrow_angle_rad) * mag
@@ -386,35 +386,35 @@ elif mode == "🚩 風の入力 (地上クルー用)":
 
         st.write("---")
         
+        # 🌟【変更】ボタンを無くし、スライダー操作だけで即保存するようにしました！
         st.write("### ② 風の強さ (m/s)")
         
         init_speed = current_val.get('speed', WIND_LEVELS[current_val['level']]["val"])
-        # 🌟【変更】初期値が5.0を超えている場合は5.0に丸める
         if init_speed > 5.0:
             init_speed = 5.0
             
+        # on_changeを使って、スライダーから指を離した瞬間に処理を走らせます
+        def on_speed_change():
+            if my_dist is not None:
+                new_speed = st.session_state["speed_slider"]
+                auto_level = get_level_from_speed(new_speed)
+                save_point_data(current_run, my_dist, current_val['clock'], auto_level, new_speed)
+
         selected_speed = st.slider(
             "指でスライドして風速を設定", 
             min_value=0.0, 
-            # 🌟【変更】最大値を5.0m/sにしました
             max_value=5.0, 
             value=float(init_speed), 
-            step=0.5
+            step=0.5,
+            key="speed_slider",
+            on_change=on_speed_change  # 🌟 指を離した瞬間に上の関数が動いて保存！
         )
         
         auto_level = get_level_from_speed(selected_speed)
         level_color = WIND_LEVELS[auto_level]["color"]
         
-        st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span>", unsafe_allow_html=True)
-        
-        if st.button(f"📥 この風速({selected_speed}m/s)で記録する", type="primary", use_container_width=True):
-            if my_dist is None:
-                st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
-            else:
-                save_point_data(current_run, my_dist, current_val['clock'], auto_level, selected_speed)
-                st.success("記録しました！")
-                time.sleep(0.5)
-                st.rerun()
+        # 🌟 即保存されるので、確認用に「保存済み」の文字を出します
+        st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span> (✓ マップに送信済み)", unsafe_allow_html=True)
                     
         st.write("---")
         if st.button("🗑️ この地点のデータを削除", type="secondary"):
