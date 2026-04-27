@@ -414,7 +414,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         level_color = WIND_LEVELS[auto_level]["color"]
         
         # 🌟 即保存されるので、確認用に「保存済み」の文字を出します
-        st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span> (✓ マップに送信済み)", unsafe_allow_html=True)
+        st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span>", unsafe_allow_html=True)
                     
         st.write("---")
         if st.button("🗑️ この地点のデータを削除", type="secondary"):
