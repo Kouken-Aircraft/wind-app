@@ -4,7 +4,7 @@ import os
 import time
 import uuid  
 from datetime import datetime, timedelta, timezone
-import matplotlib.pyplot as plt  # 🌟【修正】ここを正しい名前に直しました！
+import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import matplotlib_fontja  
@@ -260,6 +260,10 @@ if not st.session_state["authenticated"]:
 if "current_mode" not in st.session_state:
     st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)"
 
+# 自動登録の無限ループを防ぐため、削除した距離を記憶しておく
+if "deleted_dists" not in st.session_state:
+    st.session_state["deleted_dists"] = set()
+
 # ----------------------------------------------
 # 🛫 サイドバー (走目選択 ＆ 設定メニュー)
 # ----------------------------------------------
@@ -373,6 +377,13 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         st.write("---")
         
         all_data = load_all_data(current_run)
+
+        # 🌟【追加】開いた瞬間に即・無風登録！
+        if my_dist is not None and str(my_dist) not in all_data:
+            if my_dist not in st.session_state["deleted_dists"]:
+                save_point_data(current_run, my_dist, 12, "無風", 0.0)
+                all_data = load_all_data(current_run) # 最新のデータを再読み込み
+        
         current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風", "speed": 0.0})
         
         dist_display = f"{my_dist}m" if my_dist is not None else "【未入力】"
@@ -391,6 +402,8 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
                         else:
                             save_point_data(current_run, my_dist, hour, current_val['level'], current_val.get('speed', 0.0))
+                            if my_dist in st.session_state["deleted_dists"]:
+                                st.session_state["deleted_dists"].remove(my_dist)
                             st.rerun()
 
         st.write("---")
@@ -409,31 +422,35 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
                         else:
                             save_point_data(current_run, my_dist, current_val['clock'], lvl, WIND_LEVELS[lvl]["val"])
+                            if my_dist in st.session_state["deleted_dists"]:
+                                st.session_state["deleted_dists"].remove(my_dist)
                             st.rerun()
         else:
+            # スライダー方式（ボタン完全排除・即時保存）
             init_speed = current_val.get('speed', WIND_LEVELS[current_val['level']]["val"])
             if init_speed > 3.0:
                 init_speed = 3.0
                 
-            def on_speed_change():
-                if my_dist is not None:
-                    new_speed = st.session_state["speed_slider"]
-                    auto_level = get_level_from_speed(new_speed)
-                    save_point_data(current_run, my_dist, current_val['clock'], auto_level, new_speed)
-
             selected_speed = st.slider(
                 "指でスライドして風速を設定 (m/s)", 
                 min_value=0.0, 
                 max_value=3.0, 
                 value=float(init_speed), 
                 step=0.1,
-                key="speed_slider",
-                on_change=on_speed_change
+                key=f"speed_slider_{my_dist}"
             )
+            
+            # 🌟【追加】スライドした瞬間に即座に上書き保存！
+            if selected_speed != float(init_speed):
+                auto_level = get_level_from_speed(selected_speed)
+                save_point_data(current_run, my_dist, current_val['clock'], auto_level, selected_speed)
+                if my_dist in st.session_state["deleted_dists"]:
+                    st.session_state["deleted_dists"].remove(my_dist)
+                st.rerun()
             
             auto_level = get_level_from_speed(selected_speed)
             level_color = WIND_LEVELS[auto_level]["color"]
-            st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span>", unsafe_allow_html=True)
+            st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span> (✓ マップに反映中)", unsafe_allow_html=True)
                     
         st.write("---")
         if st.button("🗑️ この地点のデータを削除", type="secondary"):
@@ -441,6 +458,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                 st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
             else:
                 delete_point_data(current_run, my_dist)
+                st.session_state["deleted_dists"].add(my_dist) # 自動登録を防ぐため履歴に追加
                 st.rerun()
 
 # ----------------------------------------------------
