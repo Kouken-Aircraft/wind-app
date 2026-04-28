@@ -4,7 +4,7 @@ import os
 import time
 import uuid  
 from datetime import datetime, timedelta, timezone
-import matplotlib.pyplot as plt
+import matplotlib.subplots as plt
 import matplotlib.image as mpimg
 import numpy as np
 import matplotlib_fontja  
@@ -24,19 +24,22 @@ REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
+# 🌟【変更】ボタン入力時のデフォルト値も微調整しました
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "無風"},
-    "微風": {"val": 1.0, "color": "#00BCD4",   "label": "微風"}, 
-    "弱風": {"val": 2.5, "color": "#2962FF",   "label": "弱風"},  
-    "中風": {"val": 3.5, "color": "#FFC107",   "label": "中風"},   
-    "強風": {"val": 4.5, "color": "#FF5252",  "label": "強風"}   
+    "微風": {"val": 0.4, "color": "#00BCD4",   "label": "微風"}, 
+    "弱風": {"val": 0.8, "color": "#2962FF",   "label": "弱風"},  
+    "中風": {"val": 1.2, "color": "#FFC107",   "label": "中風"},   
+    "強風": {"val": 1.5, "color": "#FF5252",  "label": "強風"}   
 }
 
+# 🌟【変更】1.5m/s以上を強風とし、その間を0.1m/s単位で細かく判定します
 def get_level_from_speed(speed):
-    if speed <= 0.5: return "無風"
-    elif speed <= 1.5: return "微風"
-    elif speed <= 3.0: return "弱風"
-    elif speed <= 4.0: return "中風"
+    s = round(speed, 1) # 小数点誤差を防ぐため
+    if s <= 0.2: return "無風"
+    elif s <= 0.6: return "微風"
+    elif s <= 1.0: return "弱風"
+    elif s <= 1.4: return "中風"
     else: return "強風"
 
 RUNS = [f"{i}走目" for i in range(1, 21)]
@@ -61,7 +64,6 @@ def save_auth_token(token):
             json.dump(tokens, f, ensure_ascii=False, indent=2)
     except: pass
 
-# 🌟【変更】グローバル設定に入力方式（input_style）も保存・読み込みするようにしました
 def load_global_config():
     default_config = {"current_run": RUNS[0], "input_style": "🔘 ボタン (素早く)"}
     if not os.path.exists(GLOBAL_CONFIG_FILE): return default_config
@@ -117,7 +119,7 @@ def save_point_data(run_name, distance_m, clock_dir, level_name, speed_val=None)
     if speed_val is None:
         speed_val = WIND_LEVELS[level_name]["val"]
         
-    current_data[dist_key] = {"clock": clock_dir, "level": level_name, "speed": speed_val, "updated": time.time()}
+    current_data[dist_key] = {"clock": clock_dir, "level": level_name, "speed": round(float(speed_val), 1), "updated": time.time()}
     try:
         data_file = get_data_file(run_name)
         with open(data_file, "w", encoding="utf-8") as f:
@@ -139,8 +141,8 @@ def clear_all_data(run_name):
             json.dump({}, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
 
-# 🌟【変更】マップ描画関数に入力方式（input_style）を渡し、表示を切り替えます
 def draw_map(data, max_dist, input_style):
+    import matplotlib.pyplot as plt # 関数内でインポートし直して安定化
     fig_height = max(6, min(15, 10 * (max_dist / 600)))
     fig, ax = plt.subplots(figsize=(5, fig_height))
     ax.set_xlim(0 - PAD_X, 100 + PAD_X)
@@ -173,8 +175,7 @@ def draw_map(data, max_dist, input_style):
             level_info = WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])
             arrow_color = level_info["color"]
             
-            if speed_val > 0.5:
-                # 🌟【変更】スライダー方式の時だけ、マップに数値を表示する
+            if speed_val >= 0.3:  # 微風(0.3)以上なら矢印を出す
                 if "スライダー" in input_style:
                     label_text = f"{level_name}({speed_val}m/s)"
                 else:
@@ -186,11 +187,12 @@ def draw_map(data, max_dist, input_style):
             x, y = 50, dist_m
             ax.plot(x, y, 'o', color='black', markersize=8, zorder=3)
             
-            if speed_val > 0.5:
+            if speed_val >= 0.3:
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
                 
-                mag = 0.12 + (speed_val * 0.04) 
+                # 🌟【変更】最大3.0m/sでちょうどいい矢印の長さになるように倍率調整
+                mag = 0.12 + (speed_val * 0.08) 
                 
                 U = np.cos(arrow_angle_rad) * mag
                 V = np.sin(arrow_angle_rad) * mag
@@ -269,7 +271,6 @@ st.sidebar.markdown("### 🛫 どのフライト？ (走目選択)")
 
 global_config = load_global_config()
 global_run = global_config.get("current_run", RUNS[0])
-# 🌟【追加】グローバルの入力方式を取得
 global_input_style = global_config.get("input_style", "🔘 ボタン (素早く)")
 
 if "current_run" not in st.session_state:
@@ -282,7 +283,6 @@ selected_run = st.sidebar.selectbox("記録・表示するフライト", RUNS, i
 
 if selected_run != st.session_state["current_run"]:
     st.session_state["current_run"] = selected_run
-    # 走目を変更した時も入力方式を維持する
     save_global_config(selected_run, global_input_style)
     st.rerun()
 
@@ -304,13 +304,13 @@ if st.sidebar.button("⚙️ アプリの設定", type="primary" if is_settings 
 col1, col2 = st.columns(2)
 with col1:
     is_input = (st.session_state["current_mode"] == "🚩 風の入力 (地上クルー用)")
-    if st.button("🚩 入力", type="primary" if is_input else "secondary", use_container_width=True):
+    if st.button("🚩 Ground Crew (入力)", type="primary" if is_input else "secondary", use_container_width=True):
         st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)"
         st.rerun()
         
 with col2:
     is_map = (st.session_state["current_mode"] == "✈️ マップを見る (全体監視用)")
-    if st.button("✈️ マップ", type="primary" if is_map else "secondary", use_container_width=True):
+    if st.button("✈️ Pilot (マップ)", type="primary" if is_map else "secondary", use_container_width=True):
         st.session_state["current_mode"] = "✈️ マップを見る (全体監視用)"
         st.rerun()
 
@@ -336,7 +336,6 @@ if mode == "✈️ マップを見る (全体監視用)":
         
         st.markdown(f"### ✈️ Wind Monitor 【{current_run}】 ({MAX_DISTANCE}m)")
         
-        # 🌟【変更】マップ描画にグローバルの入力方式（input_style）を渡す
         fig = draw_map(all_data, MAX_DISTANCE, global_input_style)
         st.pyplot(fig, use_container_width=True)
         
@@ -381,7 +380,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風", "speed": 0.0})
         
         dist_display = f"{my_dist}m" if my_dist is not None else "【未入力】"
-        st.info(f"送信先: 【{current_run}】の {dist_display} = 【 {current_val['level']}({current_val.get('speed', 0.0)}m) 】 ({current_val['clock']}時の風)")
+        st.info(f"送信先: 【{current_run}】の {dist_display} = 【 {current_val['level']}({current_val.get('speed', 0.0)}m/s) 】 ({current_val['clock']}時の風)")
 
         st.write("### ① 風向き (時計)")
         clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
@@ -400,7 +399,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
 
         st.write("---")
         
-        # 🌟【変更】管理者画面の設定（global_input_style）に従ってUIを切り替える
         st.write("### ② 風の強さ")
         
         if "ボタン" in global_input_style:
@@ -419,8 +417,9 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         else:
             # スライダー方式
             init_speed = current_val.get('speed', WIND_LEVELS[current_val['level']]["val"])
-            if init_speed > 5.0:
-                init_speed = 5.0
+            # 🌟【変更】最大値補正を3.0に変更
+            if init_speed > 3.0:
+                init_speed = 3.0
                 
             def on_speed_change():
                 if my_dist is not None:
@@ -431,9 +430,9 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             selected_speed = st.slider(
                 "指でスライドして風速を設定 (m/s)", 
                 min_value=0.0, 
-                max_value=5.0, 
+                max_value=3.0,     # 🌟【変更】最大値を3.0に変更
                 value=float(init_speed), 
-                step=0.5,
+                step=0.1,          # 🌟【変更】0.1m/s刻みで超細かく調整可能に！
                 key="speed_slider",
                 on_change=on_speed_change
             )
@@ -458,12 +457,11 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
     crew_area.empty()
 
     with settings_area.container():
-        # 🌟【追加】グローバルな入力方式の設定を管理者画面に移動
         st.markdown("## 🎛️ 全体の入力方式設定")
         st.caption("ここで設定した入力方式は、すべての入力担当者（Ground Crew）の画面とマップの表示に適用されます。")
         new_input_style = st.radio(
             "風速の入力方式", 
-            ["🔘 ボタン (素早く)", "🎚️ スライダー (細かく)"], 
+            ["🔘 ボタン (素早く)", "🎚️ スライダー (0.1m/s単位)"], 
             index=0 if "ボタン" in global_input_style else 1, 
             horizontal=True
         )
@@ -559,7 +557,7 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
         st.write("---")
 
         st.markdown("### 💣 全データ削除")
-        st.warning("記録されているすべてのフライトの風データを一括で削除します。")
+        st.warning("記録されている**すべてのフライト（1走目〜20走目）**の風データを一括で削除します。この操作は元に戻せません。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
             for r in RUNS:
                 clear_all_data(r)
