@@ -559,7 +559,7 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
         st.write("---")
 
         st.markdown("### 💣 全データ削除")
-        st.warning("記録されている**すべてのフライト（1走目〜20走目）**の風データを一括で削除します。この操作は元に戻せません。")
+        st.warning("記録されているすべてのフライトの風データを一括で削除します。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
             for r in RUNS:
                 clear_all_data(r)
