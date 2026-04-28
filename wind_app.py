@@ -4,7 +4,7 @@ import os
 import time
 import uuid  
 from datetime import datetime, timedelta, timezone
-import matplotlib.subplots as plt
+import matplotlib.pyplot as plt  # 🌟【修正】ここを正しい名前に直しました！
 import matplotlib.image as mpimg
 import numpy as np
 import matplotlib_fontja  
@@ -24,7 +24,6 @@ REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
-# 🌟【変更】ボタン入力時のデフォルト値も微調整しました
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "無風"},
     "微風": {"val": 0.4, "color": "#00BCD4",   "label": "微風"}, 
@@ -33,9 +32,8 @@ WIND_LEVELS = {
     "強風": {"val": 1.5, "color": "#FF5252",  "label": "強風"}   
 }
 
-# 🌟【変更】1.5m/s以上を強風とし、その間を0.1m/s単位で細かく判定します
 def get_level_from_speed(speed):
-    s = round(speed, 1) # 小数点誤差を防ぐため
+    s = round(speed, 1) 
     if s <= 0.2: return "無風"
     elif s <= 0.6: return "微風"
     elif s <= 1.0: return "弱風"
@@ -142,7 +140,6 @@ def clear_all_data(run_name):
     except Exception as e: st.error(str(e))
 
 def draw_map(data, max_dist, input_style):
-    import matplotlib.pyplot as plt # 関数内でインポートし直して安定化
     fig_height = max(6, min(15, 10 * (max_dist / 600)))
     fig, ax = plt.subplots(figsize=(5, fig_height))
     ax.set_xlim(0 - PAD_X, 100 + PAD_X)
@@ -175,7 +172,7 @@ def draw_map(data, max_dist, input_style):
             level_info = WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])
             arrow_color = level_info["color"]
             
-            if speed_val >= 0.3:  # 微風(0.3)以上なら矢印を出す
+            if speed_val >= 0.3:  
                 if "スライダー" in input_style:
                     label_text = f"{level_name}({speed_val}m/s)"
                 else:
@@ -191,7 +188,6 @@ def draw_map(data, max_dist, input_style):
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
                 
-                # 🌟【変更】最大3.0m/sでちょうどいい矢印の長さになるように倍率調整
                 mag = 0.12 + (speed_val * 0.08) 
                 
                 U = np.cos(arrow_angle_rad) * mag
@@ -415,9 +411,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                             save_point_data(current_run, my_dist, current_val['clock'], lvl, WIND_LEVELS[lvl]["val"])
                             st.rerun()
         else:
-            # スライダー方式
             init_speed = current_val.get('speed', WIND_LEVELS[current_val['level']]["val"])
-            # 🌟【変更】最大値補正を3.0に変更
             if init_speed > 3.0:
                 init_speed = 3.0
                 
@@ -430,9 +424,9 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             selected_speed = st.slider(
                 "指でスライドして風速を設定 (m/s)", 
                 min_value=0.0, 
-                max_value=3.0,     # 🌟【変更】最大値を3.0に変更
+                max_value=3.0, 
                 value=float(init_speed), 
-                step=0.1,          # 🌟【変更】0.1m/s刻みで超細かく調整可能に！
+                step=0.1,
                 key="speed_slider",
                 on_change=on_speed_change
             )
