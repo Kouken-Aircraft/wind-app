@@ -433,7 +433,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             
             auto_level = get_level_from_speed(selected_speed)
             level_color = WIND_LEVELS[auto_level]["color"]
-            st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span> (✓ 送信済み)", unsafe_allow_html=True)
+            st.markdown(f"**自動判定:** <span style='color:{level_color}; font-size:20px; font-weight:bold;'>{auto_level}</span>", unsafe_allow_html=True)
                     
         st.write("---")
         if st.button("🗑️ この地点のデータを削除", type="secondary"):
