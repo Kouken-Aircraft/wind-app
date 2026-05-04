@@ -4,7 +4,7 @@ import os
 import time
 import uuid  
 from datetime import datetime, timedelta, timezone
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  
 import matplotlib.image as mpimg
 import numpy as np
 import matplotlib_fontja  
@@ -24,13 +24,22 @@ REFRESH_RATE = 2
 PAD_X = 60
 PAD_Y = 80
 
+# マップ描画時の矢印の長さ(val)や色の設定
 WIND_LEVELS = {
     "無風": {"val": 0.0, "color": "gray",      "label": "無風"},
-    "微風": {"val": 2.0, "color": "#00BCD4",   "label": "微風"}, 
-    "弱風": {"val": 4.5, "color": "#2962FF",   "label": "弱風"},  
-    "中風": {"val": 7.0, "color": "#FFC107",   "label": "中風"},   
-    "強風": {"val": 10.0, "color": "#FF5252",  "label": "強風"}   
+    "微風": {"val": 0.4, "color": "#00BCD4",   "label": "微風"}, 
+    "弱風": {"val": 0.8, "color": "#2962FF",   "label": "弱風"},  
+    "中風": {"val": 1.2, "color": "#FFC107",   "label": "中風"},   
+    "強風": {"val": 1.5, "color": "#FF5252",  "label": "強風"}   
 }
+
+def get_level_from_speed(speed):
+    s = round(speed, 1) 
+    if s <= 0.2: return "無風"
+    elif s <= 0.6: return "微風"
+    elif s <= 1.0: return "弱風"
+    elif s <= 1.4: return "中風"
+    else: return "強風"
 
 RUNS = [f"{i}走目" for i in range(1, 21)]
 
@@ -55,16 +64,22 @@ def save_auth_token(token):
     except: pass
 
 def load_global_config():
-    if not os.path.exists(GLOBAL_CONFIG_FILE): return {"current_run": RUNS[0]}
+    default_config = {"current_run": RUNS[0], "default_max_distance": 600}
+    if not os.path.exists(GLOBAL_CONFIG_FILE): return default_config
     try:
         with open(GLOBAL_CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except: return {"current_run": RUNS[0]}
+            data = json.load(f)
+            if "default_max_distance" not in data:
+                data["default_max_distance"] = 600
+            return data
+    except: return default_config
 
 def save_global_config(run_name):
+    conf = load_global_config()
+    conf["current_run"] = run_name
     try:
         with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump({"current_run": run_name}, f, ensure_ascii=False, indent=2)
+            json.dump(conf, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
 
 def get_config_file(run_name):
@@ -74,7 +89,10 @@ def get_data_file(run_name):
     return os.path.join(BASE_DIR, f"wind_data_{run_name}.json")
 
 def load_config(run_name):
-    default_conf = {"max_distance": 600}
+    global_conf = load_global_config()
+    default_dist = global_conf.get("default_max_distance", 600)
+    default_conf = {"max_distance": default_dist}
+    
     c_file = get_config_file(run_name)
     if not os.path.exists(c_file): return default_conf
     try:
@@ -82,13 +100,26 @@ def load_config(run_name):
             return json.load(f)
     except: return default_conf
 
-def save_config(run_name, max_distance):
-    config = {"max_distance": max_distance}
-    c_file = get_config_file(run_name)
+def save_config(current_run, max_distance):
     try:
-        with open(c_file, "w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-    except Exception as e: st.error(str(e))
+        start_idx = RUNS.index(current_run)
+    except ValueError:
+        start_idx = 0
+        
+    for run_name in RUNS[start_idx:]:
+        config = {"max_distance": max_distance}
+        c_file = get_config_file(run_name)
+        try:
+            with open(c_file, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except: pass
+    
+    global_conf = load_global_config()
+    global_conf["default_max_distance"] = max_distance
+    try:
+        with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(global_conf, f, ensure_ascii=False, indent=2)
+    except: pass
 
 def load_all_data(run_name):
     data_file = get_data_file(run_name)
@@ -98,10 +129,15 @@ def load_all_data(run_name):
             return json.load(f)
     except: return {}
 
-def save_point_data(run_name, distance_m, clock_dir, level_name):
+# 🌟【スライダー用】数値を保存できるように引数を復活
+def save_point_data(run_name, distance_m, clock_dir, level_name, speed_val=None):
     current_data = load_all_data(run_name)
     dist_key = str(distance_m)
-    current_data[dist_key] = {"clock": clock_dir, "level": level_name, "updated": time.time()}
+    
+    if speed_val is None:
+        speed_val = WIND_LEVELS[level_name]["val"]
+        
+    current_data[dist_key] = {"clock": clock_dir, "level": level_name, "speed": round(float(speed_val), 1), "updated": time.time()}
     try:
         data_file = get_data_file(run_name)
         with open(data_file, "w", encoding="utf-8") as f:
@@ -150,19 +186,26 @@ def draw_map(data, max_dist):
             dist_m = int(dist_key)
             clock = item['clock']
             level_name = item.get('level', "無風")
+            speed_val = item.get('speed', WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])["val"])
+            
             level_info = WIND_LEVELS.get(level_name, WIND_LEVELS["無風"])
-            speed_val = level_info["val"]
             arrow_color = level_info["color"]
-            label_text = level_info["label"]
+            
+            # 🌟【スライダー用】マップに具体的な数値を表示
+            if speed_val >= 0.3:  
+                label_text = f"{level_name}({speed_val}m/s)"
+            else:
+                label_text = "無風"
+
             if dist_m < 0 or dist_m > max_dist: continue
             x, y = 50, dist_m
             ax.plot(x, y, 'o', color='black', markersize=8, zorder=3)
             
-            if level_name != "無風" and speed_val > 0:
+            if speed_val >= 0.3:
                 wind_from_angle = 90 - (clock * 30)
                 arrow_angle_rad = np.radians(wind_from_angle + 180)
                 
-                mag = 0.12 + (speed_val * 0.015) 
+                mag = 0.12 + (speed_val * 0.08) 
                 
                 U = np.cos(arrow_angle_rad) * mag
                 V = np.sin(arrow_angle_rad) * mag
@@ -186,7 +229,7 @@ def draw_map(data, max_dist):
 # 🚀 メイン処理
 # ==========================================
 st.set_page_config(
-    page_title="Wind Monitor", 
+    page_title="Wind Monitor (Slider)", 
     page_icon="✈️", 
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -268,20 +311,18 @@ if st.sidebar.button("⚙️ アプリの設定", type="primary" if is_settings 
     st.rerun()
 
 # ----------------------------------------------
-# 🔀 メイン画面トップ (デカボタンUIでのモード切替)
+# 🔀 メイン画面トップ
 # ----------------------------------------------
 col1, col2 = st.columns(2)
 with col1:
     is_input = (st.session_state["current_mode"] == "🚩 風の入力 (地上クルー用)")
-    # 🌟【変更】元のシンプルな名前に戻しました！
-    if st.button("🚩 入力", type="primary" if is_input else "secondary", use_container_width=True):
+    if st.button("🚩 Ground Crew (入力)", type="primary" if is_input else "secondary", use_container_width=True):
         st.session_state["current_mode"] = "🚩 風の入力 (地上クルー用)"
         st.rerun()
         
 with col2:
     is_map = (st.session_state["current_mode"] == "✈️ マップを見る (全体監視用)")
-    # 🌟【変更】元のシンプルな名前に戻しました！
-    if st.button("✈️ マップ", type="primary" if is_map else "secondary", use_container_width=True):
+    if st.button("✈️ Pilot (マップ)", type="primary" if is_map else "secondary", use_container_width=True):
         st.session_state["current_mode"] = "✈️ マップを見る (全体監視用)"
         st.rerun()
 
@@ -342,53 +383,126 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             placeholder="数値を入力"
         )
         
-        if my_dist is not None and my_dist != default_dist: 
+        all_data = load_all_data(current_run)
+        
+        if my_dist is not None:
             st.query_params["dist"] = str(my_dist)
+            
+            if ("prev_dist" not in st.session_state or st.session_state["prev_dist"] != my_dist) or \
+               ("prev_run" not in st.session_state or st.session_state["prev_run"] != current_run):
+                st.session_state["prev_dist"] = my_dist
+                st.session_state["prev_run"] = current_run
+                saved_data = all_data.get(str(my_dist), {})
+                st.session_state["selected_clock"] = saved_data.get("clock", None)
+        else:
+            if "selected_clock" not in st.session_state:
+                st.session_state["selected_clock"] = None
             
         st.write("---")
         
-        all_data = load_all_data(current_run)
-        current_val = all_data.get(str(my_dist), {"clock": 12, "level": "無風"})
-        
-        dist_display = f"{my_dist}m" if my_dist is not None else "【未入力】"
-        st.info(f"送信先: 【{current_run}】の {dist_display} = 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
+        # 表示用のテキスト
+        current_val = all_data.get(str(my_dist), {"clock": None, "level": None, "speed": 0.0})
+        if current_val['level'] is not None:
+            st.info(f"✅ 保存済みデータ: 【 {current_val['level']} ({current_val.get('speed', 0.0)}m/s) 】 ({current_val['clock']}時の風)")
+        else:
+            st.info("⚠️ この地点はまだ記録されていません")
 
-        st.write("###  風向き")
-        clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-        for i in range(0, 12, 3):
-            cols = st.columns(3)
-            chunk = clock_labels[i : i+3]
-            for j, hour in enumerate(chunk):
-                with cols[j]:
-                    btn_type = "primary" if current_val['clock'] == hour else "secondary"
+        # ==================================
+        # ① 風向き選択
+        # ==================================
+        st.write("### ① 風向き (時計)")
+        
+        main_clocks = [10, 11, 12, 1, 2]
+        cols_main = st.columns(5)
+        for i, hour in enumerate(main_clocks):
+            with cols_main[i]:
+                btn_type = "primary" if st.session_state.get("selected_clock") == hour else "secondary"
+                if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
+                    if my_dist is None:
+                        st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
+                    else:
+                        st.session_state["selected_clock"] = hour
+                        st.rerun()
+
+        with st.expander("🔽 その他の方向 (3〜9時)"):
+            other_clocks = [3, 4, 5, 6, 7, 8, 9]
+            cols_o1 = st.columns(4)
+            for i, hour in enumerate(other_clocks[:4]):
+                with cols_o1[i]:
+                    btn_type = "primary" if st.session_state.get("selected_clock") == hour else "secondary"
                     if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
                         if my_dist is None:
-                            st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
+                            st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
                         else:
-                            save_point_data(current_run, my_dist, hour, current_val['level'])
+                            st.session_state["selected_clock"] = hour
+                            st.rerun()
+                            
+            cols_o2 = st.columns(3)
+            for i, hour in enumerate(other_clocks[4:]):
+                with cols_o2[i]:
+                    btn_type = "primary" if st.session_state.get("selected_clock") == hour else "secondary"
+                    if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
+                        if my_dist is None:
+                            st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
+                        else:
+                            st.session_state["selected_clock"] = hour
                             st.rerun()
 
         st.write("---")
-        st.write("###  風の強さ")
-        cols = st.columns(5)
-        levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
-        for i, lvl in enumerate(levels_jp):
-            with cols[i]:
-                is_selected = (current_val['level'] == lvl)
-                btn_type = "primary" if is_selected else "secondary"
-                if st.button(lvl, key=f"lvl_{i}", type=btn_type, use_container_width=True):
-                    if my_dist is None:
-                        st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
-                    else:
-                        save_point_data(current_run, my_dist, current_val['clock'], lvl)
-                        st.rerun()
-                    
-        st.write("")
+
+        # ==================================
+        # ② 風速の設定と送信（スライダー特化UI）
+        # ==================================
+        st.write("### ② 記録・送信")
+        
+        # 無風ボタン
+        if st.button("🍃 無風 (0.0m/s) を記録・送信", use_container_width=True):
+            if my_dist is None:
+                st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
+            else:
+                clock_to_save = st.session_state.get("selected_clock") if st.session_state.get("selected_clock") is not None else 12
+                save_point_data(current_run, my_dist, clock_to_save, "無風", 0.0)
+                st.rerun()
+
+        # スライダー
+        init_speed = current_val.get('speed', 0.0)
+        if init_speed > 3.0: init_speed = 3.0
+
+        selected_speed = st.slider(
+            "指でスライドして風速を設定 (m/s) ※風がある場合", 
+            min_value=0.0, 
+            max_value=3.0, 
+            value=float(init_speed), 
+            step=0.1,
+            key=f"slider_{my_dist}"
+        )
+        
+        auto_level = get_level_from_speed(selected_speed)
+        level_color = WIND_LEVELS[auto_level]["color"]
+        
+        # 判定結果と送信ボタン
+        col_text, col_btn = st.columns([3, 2])
+        with col_text:
+            st.markdown(f"**判定:** <span style='color:{level_color}; font-size:22px; font-weight:bold;'>{auto_level}</span>", unsafe_allow_html=True)
+            
+        with col_btn:
+            if st.button("📤 送信", type="primary", use_container_width=True):
+                if my_dist is None:
+                    st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
+                elif selected_speed > 0.0 and st.session_state.get("selected_clock") is None:
+                    st.warning("⚠️ まず「風向き（時計）」を選択してください！")
+                else:
+                    clock_to_save = st.session_state.get("selected_clock") if st.session_state.get("selected_clock") is not None else 12
+                    save_point_data(current_run, my_dist, clock_to_save, auto_level, selected_speed)
+                    st.rerun()
+
+        st.write("---")
         if st.button("🗑️ この地点のデータを削除", type="secondary"):
             if my_dist is None:
-                st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
+                st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
             else:
                 delete_point_data(current_run, my_dist)
+                st.session_state["selected_clock"] = None 
                 st.rerun()
 
 # ----------------------------------------------------
@@ -405,8 +519,8 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
         
         if st.button("長さを保存", type="primary"):
             save_config(current_run, new_dist)
-            st.success(f"【{current_run}】の設定を保存しました！")
-            time.sleep(1)
+            st.success(f"【{current_run}】以降のすべてのフライトを {new_dist}m に変更しました！")
+            time.sleep(2)
             st.rerun()
         
         st.write("---")
