@@ -55,7 +55,6 @@ def save_auth_token(token):
             json.dump(tokens, f, ensure_ascii=False, indent=2)
     except: pass
 
-# 🌟【変更】グローバル設定に「今後のデフォルトの長さ(default_max_distance)」を記憶させます
 def load_global_config():
     default_config = {"current_run": RUNS[0], "default_max_distance": 600}
     if not os.path.exists(GLOBAL_CONFIG_FILE): return default_config
@@ -67,7 +66,6 @@ def load_global_config():
             return data
     except: return default_config
 
-# 🌟【変更】現在の走目を変更する時に、設定が上書きで消えないようにします
 def save_global_config(run_name):
     conf = load_global_config()
     conf["current_run"] = run_name
@@ -82,7 +80,6 @@ def get_config_file(run_name):
 def get_data_file(run_name):
     return os.path.join(BASE_DIR, f"wind_data_{run_name}.json")
 
-# 🌟【変更】個別設定がない場合は、グローバルに保存されているデフォルトの長さを引き継ぎます
 def load_config(run_name):
     global_conf = load_global_config()
     default_dist = global_conf.get("default_max_distance", 600)
@@ -95,17 +92,24 @@ def load_config(run_name):
             return json.load(f)
     except: return default_conf
 
-# 🌟【変更】長さを保存した時に、これ以降のフライトのデフォルト長としても記憶させます
-def save_config(run_name, max_distance):
-    # ① 現在のフライト用に保存
-    config = {"max_distance": max_distance}
-    c_file = get_config_file(run_name)
+# 🌟【変更】現在の走目以降のすべてのフライトを強制的に上書きするようにしました！
+def save_config(current_run, max_distance):
+    # 現在の走目のインデックスを探す（例：3走目なら indexは 2）
     try:
-        with open(c_file, "w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-    except Exception as e: st.error(str(e))
+        start_idx = RUNS.index(current_run)
+    except ValueError:
+        start_idx = 0
+        
+    # 現在の走目から20走目まで全てに保存処理をかける
+    for run_name in RUNS[start_idx:]:
+        config = {"max_distance": max_distance}
+        c_file = get_config_file(run_name)
+        try:
+            with open(c_file, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except: pass
     
-    # ② 以降のフライトのデフォルト値としてグローバルに記憶
+    # グローバルなデフォルト値としても記憶
     global_conf = load_global_config()
     global_conf["default_max_distance"] = max_distance
     try:
@@ -385,7 +389,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             
         st.write("---")
         
-        # 表示用のテキスト
         current_val = all_data.get(str(my_dist), {"clock": None, "level": None})
         if current_val['level'] is not None:
             st.info(f"✅ 保存済みデータ: 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
@@ -479,8 +482,8 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
         
         if st.button("長さを保存", type="primary"):
             save_config(current_run, new_dist)
-            st.success(f"【{current_run}】の設定を保存しました！（以降の新しいフライトも {new_dist}m になります）")
-            time.sleep(1.5)
+            st.success(f"【{current_run}】以降のすべてのフライトを {new_dist}m に変更しました！")
+            time.sleep(2)
             st.rerun()
         
         st.write("---")
