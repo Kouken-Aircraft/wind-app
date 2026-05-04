@@ -375,9 +375,9 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         # ==================================
         # ① 風向き選択（前方特化UI）
         # ==================================
-        st.write("### ① 風向き (時計) ※一時記憶のみ")
+        # 🌟【変更】無駄なテキストを削除しました
+        st.write("### ① 風向き (時計)")
         
-        # 🌟【変更】よく使う5方向を最優先で横並びに配置
         main_clocks = [10, 11, 12, 1, 2]
         cols_main = st.columns(5)
         for i, hour in enumerate(main_clocks):
@@ -390,7 +390,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                         st.session_state["selected_clock"] = hour
                         st.rerun()
 
-        # 🌟【変更】それ以外の方向は折りたたんで隠す
         with st.expander("🔽 その他の方向 (3〜9時)"):
             other_clocks = [3, 4, 5, 6, 7, 8, 9]
             cols_o1 = st.columns(4)
