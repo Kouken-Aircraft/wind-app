@@ -372,22 +372,46 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             st.info("⚠️ この地点はまだ記録されていません")
 
         # ==================================
-        # ① 風向き選択
+        # ① 風向き選択（スマート・ダイヤルUI）
         # ==================================
         st.write("### ① 風向き (時計)")
-        clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-        for i in range(0, 12, 3):
-            cols = st.columns(3)
-            chunk = clock_labels[i : i+3]
-            for j, hour in enumerate(chunk):
-                with cols[j]:
-                    btn_type = "primary" if st.session_state.get("selected_clock") == hour else "secondary"
-                    if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
-                        if my_dist is None:
-                            st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
-                        else:
-                            st.session_state["selected_clock"] = hour
-                            st.rerun()
+        
+        # null状態からの初期化（選ぶ時は12時を基準にする）
+        if st.session_state.get("selected_clock") is None:
+            st.session_state["selected_clock"] = 12
+            
+        clock_options = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        current_idx = clock_options.index(st.session_state["selected_clock"])
+        
+        col1, col2, col3 = st.columns([1, 1.5, 1])
+        with col1:
+            if st.button("◀ 左へ", use_container_width=True):
+                if my_dist is None:
+                    st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
+                else:
+                    st.session_state["selected_clock"] = clock_options[(current_idx - 1) % 12]
+                    st.rerun()
+        with col2:
+            chosen = st.selectbox(
+                "風向", 
+                clock_options, 
+                index=current_idx, 
+                format_func=lambda x: f"🧭 {x}時の方向", 
+                label_visibility="collapsed"
+            )
+            if chosen != st.session_state["selected_clock"]:
+                if my_dist is None:
+                    st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
+                else:
+                    st.session_state["selected_clock"] = chosen
+                    st.rerun()
+        with col3:
+            if st.button("右へ ▶", use_container_width=True):
+                if my_dist is None:
+                    st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
+                else:
+                    st.session_state["selected_clock"] = clock_options[(current_idx + 1) % 12]
+                    st.rerun()
 
         st.write("---")
 
@@ -405,11 +429,9 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                 if st.button(lvl, key=f"lvl_btn_{i}", type=btn_type, use_container_width=True):
                     if my_dist is None:
                         st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
-                    elif lvl != "無風" and st.session_state.get("selected_clock") is None:
-                        st.warning("⚠️ まず「風向き（時計）」を選択してから、風の強さを押してください！")
                     else:
-                        clock_to_save = st.session_state.get("selected_clock") if st.session_state.get("selected_clock") is not None else 12
-                        save_point_data(current_run, my_dist, clock_to_save, lvl)
+                        # 風速ボタンを押した瞬間にマップへ送信・保存
+                        save_point_data(current_run, my_dist, st.session_state["selected_clock"], lvl)
                         st.rerun()
                     
         st.write("---")
@@ -418,7 +440,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                 st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
             else:
                 delete_point_data(current_run, my_dist)
-                st.session_state["selected_clock"] = None 
+                st.session_state["selected_clock"] = None # 削除したら風向もリセット
                 st.rerun()
 
 # ----------------------------------------------------
