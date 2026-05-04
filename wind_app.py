@@ -347,33 +347,35 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             placeholder="数値を入力"
         )
         
-        # 🌟【追加】距離が変わったら、一時保存用の「選択中の風向き」をリセット or 保存済みデータから復元
+        # 🌟【変更】初期値をnull（None）にする処理
+        all_data = load_all_data(current_run)
+        
         if my_dist is not None:
             st.query_params["dist"] = str(my_dist)
-            all_data = load_all_data(current_run)
             
+            # 距離が変わった、または再読み込み時にステートを更新
             if "prev_dist" not in st.session_state or st.session_state["prev_dist"] != my_dist:
                 st.session_state["prev_dist"] = my_dist
                 saved_data = all_data.get(str(my_dist), {})
-                st.session_state["selected_clock"] = saved_data.get("clock", 12)
+                # 保存データがあれば反映、なければNone（null）
+                st.session_state["selected_clock"] = saved_data.get("clock", None)
         else:
-            all_data = {}
             if "selected_clock" not in st.session_state:
-                st.session_state["selected_clock"] = 12
+                st.session_state["selected_clock"] = None
             
         st.write("---")
         
-        # 保存されているデータがあれば表示、なければ未記録とする
-        saved_val = all_data.get(str(my_dist), None)
-        if saved_val:
-            st.info(f"✅ 保存済みデータ: 【 {saved_val['level']} 】 ({saved_val['clock']}時の風)")
+        # 表示用のテキスト
+        current_val = all_data.get(str(my_dist), {"clock": None, "level": None})
+        if current_val['level'] is not None:
+            st.info(f"✅ 保存済みデータ: 【 {current_val['level']} 】 ({current_val['clock']}時の風)")
         else:
             st.info("⚠️ この地点はまだ記録されていません")
 
         # ==================================
         # ① 風向き選択（押しても保存されない）
         # ==================================
-        st.write("### ① 風向き (時計) ※まだ保存されません")
+        st.write("### ① 風向き (時計) ※一時記憶のみ")
         clock_labels = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         for i in range(0, 12, 3):
             cols = st.columns(3)
@@ -381,50 +383,41 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             for j, hour in enumerate(chunk):
                 with cols[j]:
                     # 選択中のものをハイライト
-                    btn_type = "primary" if st.session_state.get("selected_clock", 12) == hour else "secondary"
+                    btn_type = "primary" if st.session_state.get("selected_clock") == hour else "secondary"
                     if st.button(f"{hour}時", key=f"clk_{hour}", type=btn_type, use_container_width=True):
                         if my_dist is None:
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
                         else:
-                            # 🌟【重要】ここでは save_point_data を呼ばない。向きを一時記憶するだけ。
+                            # 🌟 ここでは save_point_data を呼ばない。向きを一時記憶するだけ。
                             st.session_state["selected_clock"] = hour
                             st.rerun()
 
         st.write("---")
-        
-        # ==================================
-        # ② 無風ボタン（独立・即送信）
-        # ==================================
-        st.write("### ② 記録・送信 (マップに反映されます)")
-        
-        # 🌟【変更】無風ボタンをデカデカと独立配置
-        if st.button("🍃 無風 (0.0m/s) を記録・送信", use_container_width=True):
-            if my_dist is None:
-                st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
-            else:
-                save_point_data(current_run, my_dist, st.session_state["selected_clock"], "無風")
-                st.rerun()
-                
-        st.write("") # 少し隙間を空ける
 
         # ==================================
-        # ③ 風速ボタン（即送信）
+        # ② 風速ボタン（ここで送信・保存）
         # ==================================
-        # 🌟【変更】無風を除いた4つの風速ボタンを配置
-        cols = st.columns(4)
-        levels_jp = ["微風", "弱風", "中風", "強風"]
+        st.write("### ② 記録・送信 (マップに反映されます)")
+        cols = st.columns(5)
+        # 🌟【変更】無風もこの列に戻しました
+        levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
         for i, lvl in enumerate(levels_jp):
             with cols[i]:
                 # 保存されているレベルと一致しているか
-                is_selected = (saved_val is not None and saved_val['level'] == lvl)
+                is_selected = (current_val['level'] == lvl)
                 btn_type = "primary" if is_selected else "secondary"
                 
                 if st.button(lvl, key=f"lvl_btn_{i}", type=btn_type, use_container_width=True):
                     if my_dist is None:
                         st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
+                    # 🌟【追加】風向が選ばれていないのに風速を押した場合のガード（無風は風向不要なので許容）
+                    elif lvl != "無風" and st.session_state.get("selected_clock") is None:
+                        st.warning("⚠️ まず「風向き（時計）」を選択してから、風の強さを押してください！")
                     else:
-                        # 🌟【重要】ここで初めて save_point_data を呼んで送信する
-                        save_point_data(current_run, my_dist, st.session_state["selected_clock"], lvl)
+                        # 無風の時に風向がNoneなら、とりあえずマップ描画エラー回避のために12を入れておく
+                        clock_to_save = st.session_state.get("selected_clock") if st.session_state.get("selected_clock") is not None else 12
+                        # 🌟 ここで初めて save_point_data を呼んで送信する
+                        save_point_data(current_run, my_dist, clock_to_save, lvl)
                         st.rerun()
                     
         st.write("---")
@@ -433,6 +426,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                 st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
             else:
                 delete_point_data(current_run, my_dist)
+                st.session_state["selected_clock"] = None # 削除したら風向もリセット
                 st.rerun()
 
 # ----------------------------------------------------
