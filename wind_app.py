@@ -347,15 +347,16 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             placeholder="数値を入力"
         )
         
-        # 🌟【変更】初期値をnull（None）にする処理
         all_data = load_all_data(current_run)
         
         if my_dist is not None:
             st.query_params["dist"] = str(my_dist)
             
-            # 距離が変わった、または再読み込み時にステートを更新
-            if "prev_dist" not in st.session_state or st.session_state["prev_dist"] != my_dist:
+            # 🌟【修正】距離が変わった時だけでなく、走目(current_run)が変わった時も風向ステートを更新！
+            if ("prev_dist" not in st.session_state or st.session_state["prev_dist"] != my_dist) or \
+               ("prev_run" not in st.session_state or st.session_state["prev_run"] != current_run):
                 st.session_state["prev_dist"] = my_dist
+                st.session_state["prev_run"] = current_run
                 saved_data = all_data.get(str(my_dist), {})
                 # 保存データがあれば反映、なければNone（null）
                 st.session_state["selected_clock"] = saved_data.get("clock", None)
@@ -388,7 +389,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                         if my_dist is None:
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
                         else:
-                            # 🌟 ここでは save_point_data を呼ばない。向きを一時記憶するだけ。
                             st.session_state["selected_clock"] = hour
                             st.rerun()
 
@@ -399,7 +399,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         # ==================================
         st.write("### ② 記録・送信 (マップに反映されます)")
         cols = st.columns(5)
-        # 🌟【変更】無風もこの列に戻しました
         levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
         for i, lvl in enumerate(levels_jp):
             with cols[i]:
@@ -410,13 +409,10 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                 if st.button(lvl, key=f"lvl_btn_{i}", type=btn_type, use_container_width=True):
                     if my_dist is None:
                         st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
-                    # 🌟【追加】風向が選ばれていないのに風速を押した場合のガード（無風は風向不要なので許容）
                     elif lvl != "無風" and st.session_state.get("selected_clock") is None:
                         st.warning("⚠️ まず「風向き（時計）」を選択してから、風の強さを押してください！")
                     else:
-                        # 無風の時に風向がNoneなら、とりあえずマップ描画エラー回避のために12を入れておく
                         clock_to_save = st.session_state.get("selected_clock") if st.session_state.get("selected_clock") is not None else 12
-                        # 🌟 ここで初めて save_point_data を呼んで送信する
                         save_point_data(current_run, my_dist, clock_to_save, lvl)
                         st.rerun()
                     
