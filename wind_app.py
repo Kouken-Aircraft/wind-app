@@ -55,18 +55,25 @@ def save_auth_token(token):
             json.dump(tokens, f, ensure_ascii=False, indent=2)
     except: pass
 
+# 🌟【変更】グローバル設定に「今後のデフォルトの長さ(default_max_distance)」を記憶させます
 def load_global_config():
-    default_config = {"current_run": RUNS[0]}
+    default_config = {"current_run": RUNS[0], "default_max_distance": 600}
     if not os.path.exists(GLOBAL_CONFIG_FILE): return default_config
     try:
         with open(GLOBAL_CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            if "default_max_distance" not in data:
+                data["default_max_distance"] = 600
+            return data
     except: return default_config
 
+# 🌟【変更】現在の走目を変更する時に、設定が上書きで消えないようにします
 def save_global_config(run_name):
+    conf = load_global_config()
+    conf["current_run"] = run_name
     try:
         with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump({"current_run": run_name}, f, ensure_ascii=False, indent=2)
+            json.dump(conf, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
 
 def get_config_file(run_name):
@@ -75,8 +82,12 @@ def get_config_file(run_name):
 def get_data_file(run_name):
     return os.path.join(BASE_DIR, f"wind_data_{run_name}.json")
 
+# 🌟【変更】個別設定がない場合は、グローバルに保存されているデフォルトの長さを引き継ぎます
 def load_config(run_name):
-    default_conf = {"max_distance": 600}
+    global_conf = load_global_config()
+    default_dist = global_conf.get("default_max_distance", 600)
+    default_conf = {"max_distance": default_dist}
+    
     c_file = get_config_file(run_name)
     if not os.path.exists(c_file): return default_conf
     try:
@@ -84,13 +95,23 @@ def load_config(run_name):
             return json.load(f)
     except: return default_conf
 
+# 🌟【変更】長さを保存した時に、これ以降のフライトのデフォルト長としても記憶させます
 def save_config(run_name, max_distance):
+    # ① 現在のフライト用に保存
     config = {"max_distance": max_distance}
     c_file = get_config_file(run_name)
     try:
         with open(c_file, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(str(e))
+    
+    # ② 以降のフライトのデフォルト値としてグローバルに記憶
+    global_conf = load_global_config()
+    global_conf["default_max_distance"] = max_distance
+    try:
+        with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(global_conf, f, ensure_ascii=False, indent=2)
+    except: pass
 
 def load_all_data(run_name):
     data_file = get_data_file(run_name)
@@ -357,7 +378,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                 st.session_state["prev_dist"] = my_dist
                 st.session_state["prev_run"] = current_run
                 saved_data = all_data.get(str(my_dist), {})
-                # 保存データがあれば反映、なければNone（null）
                 st.session_state["selected_clock"] = saved_data.get("clock", None)
         else:
             if "selected_clock" not in st.session_state:
@@ -373,9 +393,8 @@ elif mode == "🚩 風の入力 (地上クルー用)":
             st.info("⚠️ この地点はまだ記録されていません")
 
         # ==================================
-        # ① 風向き選択（前方特化UI）
+        # ① 風向き選択
         # ==================================
-        # 🌟【変更】無駄なテキストを削除しました
         st.write("### ① 風向き (時計)")
         
         main_clocks = [10, 11, 12, 1, 2]
@@ -424,7 +443,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
         levels_jp = ["無風", "微風", "弱風", "中風", "強風"]
         for i, lvl in enumerate(levels_jp):
             with cols[i]:
-                # 保存されているレベルと一致しているか
                 is_selected = (current_val['level'] == lvl)
                 btn_type = "primary" if is_selected else "secondary"
                 
@@ -444,7 +462,7 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                 st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してからボタンを押してください！")
             else:
                 delete_point_data(current_run, my_dist)
-                st.session_state["selected_clock"] = None # 削除したら風向もリセット
+                st.session_state["selected_clock"] = None 
                 st.rerun()
 
 # ----------------------------------------------------
@@ -461,8 +479,8 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
         
         if st.button("長さを保存", type="primary"):
             save_config(current_run, new_dist)
-            st.success(f"【{current_run}】の設定を保存しました！")
-            time.sleep(1)
+            st.success(f"【{current_run}】の設定を保存しました！（以降の新しいフライトも {new_dist}m になります）")
+            time.sleep(1.5)
             st.rerun()
         
         st.write("---")
