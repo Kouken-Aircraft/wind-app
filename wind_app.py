@@ -92,15 +92,12 @@ def load_config(run_name):
             return json.load(f)
     except: return default_conf
 
-# 🌟【変更】現在の走目以降のすべてのフライトを強制的に上書きするようにしました！
 def save_config(current_run, max_distance):
-    # 現在の走目のインデックスを探す（例：3走目なら indexは 2）
     try:
         start_idx = RUNS.index(current_run)
     except ValueError:
         start_idx = 0
         
-    # 現在の走目から20走目まで全てに保存処理をかける
     for run_name in RUNS[start_idx:]:
         config = {"max_distance": max_distance}
         c_file = get_config_file(run_name)
@@ -109,7 +106,6 @@ def save_config(current_run, max_distance):
                 json.dump(config, f, ensure_ascii=False, indent=2)
         except: pass
     
-    # グローバルなデフォルト値としても記憶
     global_conf = load_global_config()
     global_conf["default_max_distance"] = max_distance
     try:
@@ -559,7 +555,8 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
         st.write("---")
 
         st.markdown("### 💣 全データ削除")
-        st.warning("記録されている**すべてのフライト（1走目〜20走目）**の風データを一括で削除します。この操作は元に戻せません。")
+        # 🌟【修正】警告メッセージの「**」を取り除きました！
+        st.warning("記録されているすべてのフライト（1走目〜20走目）の風データを一括で削除します。この操作は元に戻せません。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
             for r in RUNS:
                 clear_all_data(r)
