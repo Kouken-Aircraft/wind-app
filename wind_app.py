@@ -406,6 +406,9 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                         st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
                     else:
                         st.session_state["selected_clock"] = hour
+                        # 🌟【追加】すでに風速が記録されているなら、風向変更だけで即保存！
+                        if current_val['level'] is not None:
+                            save_point_data(current_run, my_dist, hour, current_val['level'])
                         st.rerun()
 
         with st.expander("🔽 その他の方向 (3〜9時)"):
@@ -419,6 +422,9 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
                         else:
                             st.session_state["selected_clock"] = hour
+                            # 🌟【追加】ここも同様に即保存
+                            if current_val['level'] is not None:
+                                save_point_data(current_run, my_dist, hour, current_val['level'])
                             st.rerun()
                             
             cols_o2 = st.columns(3)
@@ -430,6 +436,9 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
                         else:
                             st.session_state["selected_clock"] = hour
+                            # 🌟【追加】ここも同様に即保存
+                            if current_val['level'] is not None:
+                                save_point_data(current_run, my_dist, hour, current_val['level'])
                             st.rerun()
 
         st.write("---")
@@ -555,7 +564,6 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
         st.write("---")
 
         st.markdown("### 💣 全データ削除")
-        # 🌟【修正】警告メッセージの「**」を取り除きました！
         st.warning("記録されているすべてのフライト（1走目〜20走目）の風データを一括で削除します。この操作は元に戻せません。")
         if st.button("🚨 すべてのデータを完全に削除する", type="primary"):
             for r in RUNS:
