@@ -56,13 +56,14 @@ def save_auth_token(token):
     except: pass
 
 def load_global_config():
-    default_config = {"current_run": RUNS[0], "default_max_distance": 600}
+    # 🌟【変更】デフォルトの滑走路長を 400m に変更
+    default_config = {"current_run": RUNS[0], "default_max_distance": 400}
     if not os.path.exists(GLOBAL_CONFIG_FILE): return default_config
     try:
         with open(GLOBAL_CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             if "default_max_distance" not in data:
-                data["default_max_distance"] = 600
+                data["default_max_distance"] = 400
             return data
     except: return default_config
 
@@ -82,7 +83,8 @@ def get_data_file(run_name):
 
 def load_config(run_name):
     global_conf = load_global_config()
-    default_dist = global_conf.get("default_max_distance", 600)
+    # 🌟【変更】設定がない場合の取得元デフォルト値も 400m に変更
+    default_dist = global_conf.get("default_max_distance", 400)
     default_conf = {"max_distance": default_dist}
     
     c_file = get_config_file(run_name)
@@ -150,7 +152,8 @@ def clear_all_data(run_name):
     except Exception as e: st.error(str(e))
 
 def draw_map(data, max_dist):
-    fig_height = max(6, min(15, 10 * (max_dist / 600)))
+    # 🌟【変更】基準を400mに変更し、縦横比を最適化
+    fig_height = max(6, min(15, 10 * (max_dist / 400)))
     fig, ax = plt.subplots(figsize=(5, fig_height))
     ax.set_xlim(0 - PAD_X, 100 + PAD_X)
     ax.set_ylim(0 - PAD_Y, max_dist + PAD_Y)
@@ -166,9 +169,9 @@ def draw_map(data, max_dist):
         runway = plt.Rectangle((30, 0), 40, max_dist, color='#555555', alpha=0.9)
         ax.add_patch(runway)
         
-        # 🌟【変更】センターラインを「線30m・間隔20m（合計50m周期）」で正確に引く
+        # センターライン（線30m・間隔20m）
         for y_start in range(0, max_dist, 50):
-            y_end = min(y_start + 30, max_dist) # 最大距離を突き抜けないように制限
+            y_end = min(y_start + 30, max_dist) 
             ax.plot([50, 50], [y_start, y_end], color='white', linestyle='-', linewidth=2)
             
         step = 100 if max_dist > 300 else 50
@@ -290,7 +293,7 @@ if selected_run != st.session_state["current_run"]:
 
 current_run = st.session_state["current_run"]
 config = load_config(current_run)
-MAX_DISTANCE = config.get("max_distance", 600)
+MAX_DISTANCE = config.get("max_distance", 400) # ここも400に合わせておく
 
 st.sidebar.write("---")
 
@@ -485,6 +488,7 @@ elif mode == "⚙️ アプリの設定 (管理者用)":
     with settings_area.container():
         st.markdown("## ⚙️ Config")
         st.markdown(f"### 📏 滑走路設定 【{current_run}】")
+        # 🌟【変更】ここの初期値も 400 になるよう修正
         new_dist = st.number_input(f"【{current_run}】の滑走路の全長 (m)", value=MAX_DISTANCE, step=50, min_value=100)
         
         if st.button("長さを保存", type="primary"):
