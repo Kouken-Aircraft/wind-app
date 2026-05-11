@@ -165,7 +165,12 @@ def draw_map(data, max_dist):
         ax.add_patch(lawn)
         runway = plt.Rectangle((30, 0), 40, max_dist, color='#555555', alpha=0.9)
         ax.add_patch(runway)
-        ax.plot([50, 50], [0, max_dist], color='white', linestyle='--', linewidth=2)
+        
+        # 🌟【変更】センターラインを「線30m・間隔20m（合計50m周期）」で正確に引く
+        for y_start in range(0, max_dist, 50):
+            y_end = min(y_start + 30, max_dist) # 最大距離を突き抜けないように制限
+            ax.plot([50, 50], [y_start, y_end], color='white', linestyle='-', linewidth=2)
+            
         step = 100 if max_dist > 300 else 50
         for d in range(0, max_dist + 1, step):
             ax.text(-25, d, f"{d}m", color='black', fontsize=10, ha='right', va='center',
@@ -406,7 +411,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                         st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
                     else:
                         st.session_state["selected_clock"] = hour
-                        # 🌟【追加】すでに風速が記録されているなら、風向変更だけで即保存！
                         if current_val['level'] is not None:
                             save_point_data(current_run, my_dist, hour, current_val['level'])
                         st.rerun()
@@ -422,7 +426,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
                         else:
                             st.session_state["selected_clock"] = hour
-                            # 🌟【追加】ここも同様に即保存
                             if current_val['level'] is not None:
                                 save_point_data(current_run, my_dist, hour, current_val['level'])
                             st.rerun()
@@ -436,7 +439,6 @@ elif mode == "🚩 風の入力 (地上クルー用)":
                             st.error("⚠️ 上の入力欄に「現在位置 (m)」を入力してください！")
                         else:
                             st.session_state["selected_clock"] = hour
-                            # 🌟【追加】ここも同様に即保存
                             if current_val['level'] is not None:
                                 save_point_data(current_run, my_dist, hour, current_val['level'])
                             st.rerun()
