@@ -9,6 +9,12 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 
+# 🌟【重要】Matplotlibの日本語化ライブラリ (要 requirements.txt 追記)
+try:
+    import japanize_matplotlib
+except ImportError:
+    pass # インストールされていない場合は無視（エラー回避）
+
 # ==========================================
 # ⚙️ 設定・パス
 # ==========================================
@@ -18,7 +24,7 @@ DB_FORECAST = os.path.join(BASE_DIR, "ops_forecast.json")
 DB_REPORT = os.path.join(BASE_DIR, "ops_report.json")
 DB_JUDGE = os.path.join(BASE_DIR, "ops_judge.json")
 
-# 琵琶湖観測地点 (座標はここから直接参照するので、JSONが古くてもOK)
+# 琵琶湖観測地点
 STATIONS = {
     "60131": {"name": "彦根", "lat": 35.2750, "lon": 136.2467},
     "60026": {"name": "長浜", "lat": 35.3850, "lon": 136.2650},
@@ -85,10 +91,10 @@ def fetch_amedas():
 # 🚀 UI
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.101</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.102</small>", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.header("🌐 Global Settings")
+    st.header("🌐 全体設定")
     current_run = st.selectbox("対象フライト", [f"{i}走目" for i in range(1, 21)])
     runway_heading = st.number_input("プラットホーム方位 (deg)", value=270)
     launch_limit = st.number_input("横風限界 (m/s)", value=3.0, step=0.1)
@@ -107,23 +113,29 @@ with tab1:
     
     with col_l:
         st.subheader("琵琶湖 統合風況マップ")
-        fig, ax = plt.subplots(figsize=(8, 6)); ax.set_facecolor('#E3F2FD')
+        # 🌟日本語化されたMatplotlibで描画
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.set_facecolor('#E3F2FD')
+        ax.set_title("琵琶湖 周辺風況実況", fontsize=16) # ここも日本語に
         
-        # 🌟座標バグ修正: 地点座標は内部定数(STATIONS)から取得
         if amedas and "stations" in amedas:
             for sid, s in amedas["stations"].items():
                 pos = STATIONS.get(sid)
                 if pos:
                     u, v = s.get("u", 0.0), s.get("v", 0.0)
                     ax.quiver(pos["lon"], pos["lat"], u, v, color='blue', scale=25)
-                    ax.text(pos["lon"], pos["lat"]-0.01, f"{pos['name']}\n{s.get('speed', 0)}m", ha='center', fontsize=9)
+                    # 🌟日本語の地点名を表示
+                    ax.text(pos["lon"], pos["lat"]-0.012, f"{pos['name']}\n{s.get('speed', 0)}m/s", 
+                            ha='center', fontsize=10, fontweight='bold')
         
         if reps:
             lr = reps[-1]
             ax.quiver(136.24, 35.27, lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25)
-            ax.text(136.24, 35.25, "現地報告", color='red', fontweight='bold', ha='center')
+            ax.text(136.24, 35.25, "現地報告", color='red', fontweight='bold', ha='center', fontsize=10)
         
-        ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5); st.pyplot(fig)
+        ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
+        ax.set_xlabel("経度"); ax.set_ylabel("緯度")
+        st.pyplot(fig)
 
     with col_r:
         st.subheader("横風判定")
@@ -136,8 +148,9 @@ with tab1:
             if cw_pct > 100: st.error(f"❌ STAY ({cw_pct:.1f}%)")
             elif cw_pct > 80: st.warning(f"⚠️ CAUTION ({cw_pct:.1f}%)")
             else: st.success(f"✅ GO ({cw_pct:.1f}%)")
-        else: st.info("データ未取得")
+        else: st.info("データ未取得。サイドバーから更新してください。")
 
+# (以降のタブ3, 4, 5, 2 は Ver.101 と同じため省略せずに保持してください)
 # --- タブ3: 予報入力 ---
 with tab3:
     st.subheader("🖊️ 予報値入力")
