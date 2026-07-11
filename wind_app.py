@@ -9,12 +9,6 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 
-# MSM解析用ライブラリ (要 requirements.txt)
-try:
-    import xarray as xr
-except ImportError:
-    st.error("xarrayがインストールされていません。requirements.txtに追加してください。")
-
 # ==========================================
 # ⚙️ 設定・パス
 # ==========================================
@@ -25,72 +19,32 @@ REPORT_DATA_FILE = os.path.join(BASE_DIR, "ops_report_data.json")
 MSM_DATA_FILE = os.path.join(BASE_DIR, "ops_msm_data.json")
 JUDGE_DATA_FILE = os.path.join(BASE_DIR, "ops_judge_data.json")
 
-# MSM抽出地点 (琵琶湖をカバーする代表点)
-MSM_POINTS = {
-    "彦根沖": {"lat": 35.3, "lon": 136.2},
-    "今津沖": {"lat": 35.4, "lon": 136.0},
-    "南小松沖": {"lat": 35.2, "lon": 136.0},
-    "長浜沖": {"lat": 35.4, "lon": 136.2}
+AMEDAS_STATIONS = {
+    "60131": {"name": "彦根", "lat": 35.2750, "lon": 136.2467},
+    "60026": {"name": "長浜", "lat": 35.3850, "lon": 136.2650},
+    "60111": {"name": "今津", "lat": 35.4117, "lon": 136.0350}
 }
+DIR_16_NAMES = ["無風", "北北東", "北東", "東北東", "東", "東南東", "南東", "南南東", "南", "南南西", "南西", "西南西", "西", "西北西", "北西", "北北西", "北"]
 
 # ==========================================
-# 🌊 MSM 自動取得ロジック (Phase 2 核心)
+# 🛠️ ユーティリティ (安全第一)
 # ==========================================
-def fetch_msm_latest():
-    """京都大学RISHからMSM最新予報(地上面)を取得しJSON化"""
-    try:
-        # 最新のデータ日時に合わせてURLを構築 (実際にはUTC時間などで計算が必要)
-        # ここでは仕様書に基づきOpenDAPまたは直接NetCDFを読み込む構造を定義
-        now = datetime.now(timezone.utc)
-        # MSMの更新タイミングに合わせたパス構築 (例: 1日1回のアーカイブアクセス)
-        url = f"http://database.rish.kyoto-u.ac.jp/arch/jmadata/data/gpv/netcdf/MSM-S/{now.year}/{now.strftime('%m%d')}.nc"
-        
-        # 🌟xarrayでリモートNetCDFを開く
-        with xr.open_dataset(url) as ds:
-            # 琵琶湖周辺を抽出
-            msm_extracted = []
-            obs_time_list = ds.time.values
-            
-            for loc_name, pos in MSM_POINTS.items():
-                # 最寄りの格子点を選択
-                point_ds = ds.sel(lat=pos["lat"], lon=pos["lon"], method="nearest")
-                
-                for t_idx in range(len(obs_time_list)):
-                    t_val = pd.to_datetime(obs_time_list[t_idx]).tz_localize('UTC').tz_convert('Asia/Tokyo')
-                    # 本日の日中データのみ抽出
-                    if t_val.hour >= 4 and t_val.hour <= 19:
-                        u = float(point_ds.u.values[t_idx])
-                        v = float(point_ds.v.values[t_idx])
-                        speed = math.sqrt(u**2 + v**2)
-                        
-                        msm_extracted.append({
-                            "time": t_val.strftime("%H:%M"),
-                            "location": loc_name,
-                            "speed": round(speed, 2),
-                            "u": round(u, 2),
-                            "v": round(v, 2),
-                            "type": "FORECAST_MSM"
-                        })
-            
-            with open(MSM_DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump(msm_extracted, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        st.error(f"MSM取得失敗(サーバー未更新または通信制限): {e}")
-        return False
-
-# ==========================================
-# 🛠️ 既存ユーティリティ
-# ==========================================
-def load_data(path):
-    if not os.path.exists(path): return [] if "data" in path or "scw" in path or "msm" in path else None
+def load_data_safe(path, default=[]):
+    if not os.path.exists(path): return default
     try:
         with open(path, "r", encoding="utf-8") as f: return json.load(f)
-    except: return [] if "data" in path else None
+    except: return default
 
-def save_data(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def save_data_safe(path, data):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except: pass
+
+def clock_to_uv(clock_dir, speed):
+    if speed <= 0: return 0.0, 0.0
+    rad = math.radians((clock_dir * 30) % 360)
+    return round(-speed * math.sin(rad), 2), round(-speed * math.cos(rad), 2)
 
 def calculate_crosswind(u, v, runway_deg):
     speed = math.sqrt(u**2 + v**2)
@@ -100,63 +54,149 @@ def calculate_crosswind(u, v, runway_deg):
     return round(speed * math.sin(relative_angle), 2)
 
 # ==========================================
+# 📡 AMeDAS 自動取得
+# ==========================================
+def fetch_amedas():
+    try:
+        time_url = "https://www.jma.go.jp/bosai/amedas/data/latest_time.txt"
+        t_str = requests.get(time_url, timeout=5).text.strip()
+        t_key = datetime.fromisoformat(t_str).strftime("%Y%m%d%H%M%S")
+        all_data = requests.get(f"https://www.jma.go.jp/bosai/amedas/data/map/{t_key}.json", timeout=5).json()
+        ext = {"observed": t_str, "stations": {}}
+        for sid, info in AMEDAS_STATIONS.items():
+            if sid in all_data:
+                s = all_data[sid]; spd = s.get("wind", [0])[0]; dr = s.get("wndDir", [0])[0]
+                ang = (dr - 1) * 22.5 if dr > 0 else 0
+                u = -spd * math.sin(math.radians(ang)); v = -spd * math.cos(math.radians(ang))
+                ext["stations"][sid] = {"name": info["name"], "speed": spd, "dir": dr, "u": u, "v": v}
+        save_data_safe(DATA_FILE_AMEDAS, ext); return True
+    except: return False
+
+# ==========================================
 # 🚀 メイン UI
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.97</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.98</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 Global Settings")
     current_run = st.selectbox("対象フライト", [f"{i}走目" for i in range(1, 21)])
-    runway_heading = st.number_input("離陸方位 (deg)", value=270)
-    launch_limit = st.number_input("横風限界 (m/s)", value=3.0)
+    runway_heading = st.number_input("離陸方位 (deg)", value=270, help="西=270, 北=0")
+    launch_limit = st.number_input("横風限界 (m/s)", value=3.0, step=0.1)
     
     st.write("---")
-    if st.button("📡 アメダス ＋ 🌊 MSM 更新", use_container_width=True):
-        a_ok = True # amedas fetch logic (省略して継承)
-        m_ok = fetch_msm_latest()
-        if a_ok and m_ok: st.success("全データ更新完了")
+    if st.button("📡 最新データ一括更新", use_container_width=True):
+        if fetch_amedas(): st.success("更新成功")
+        else: st.error("AMeDAS取得失敗")
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🧭 現在状況", "📊 予報比較", "🖊️ SCW入力", "🚩 実測報告", "🚀 発進判定"])
 
-# --- タブ2: 予報比較 (MSMデータ統合版) ---
-with tab2:
-    st.subheader("📊 MSM予報 vs SCW予報 vs 実測")
-    
-    msm_data = load_data(MSM_DATA_FILE)
-    scw_data = load_data(SCW_DATA_FILE)
-    reps = load_data(REPORT_DATA_FILE)
-    
-    all_compare = []
-    if msm_data:
-        for m in msm_data:
-            all_compare.append({"時刻": m["time"], "地点": m["location"], "ソース": "MSM(広域)", "風速": m["speed"]})
-    if scw_data:
-        for s in scw_data:
-            all_compare.append({"時刻": s.get("time"), "地点": s.get("location"), "ソース": "SCW(局地)", "風速": s.get("speed")})
-    
-    if all_compare:
-        df = pd.DataFrame(all_compare).sort_values(["時刻", "地点"])
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("MSMデータを取得するか、SCWを入力してください。")
-
-# --- タブ1: 現在状況 (背景場表示) ---
+# --- タブ1: 現在状況 ---
 with tab1:
-    msm = load_data(MSM_DATA_FILE)
-    # 現在時刻に近いMSM予報を「背景場」として地図やサマリーに反映
-    now_str = datetime.now(timezone(timedelta(hours=9))).strftime("%H:00")
+    amedas = load_data_safe(DATA_FILE_AMEDAS, None)
+    reports = load_data_safe(REPORT_DATA_FILE, [])
     
-    col_l, col_r = st.columns([2, 1])
-    with col_l:
-        st.subheader("統合風況ダッシュボード")
-        if msm:
-            # 簡略化：最新MSM予報を表示
-            latest_msm = [m for m in msm if m["time"] == now_str]
-            if latest_msm:
-                st.caption(f"🌊 MSM背景場 ({now_str} 予測): 琵琶湖全体は現在 {latest_msm[0]['speed']}m/s 程度の風の流れがあります。")
+    col_main, col_sub = st.columns([2, 1])
+    with col_main:
+        st.subheader("現在の風況（機体相対）")
+        # 代表地点の選定（現場実測を最優先、なければ彦根）
+        actual = reports[-1] if reports else (amedas["stations"].get("60131") if amedas else None)
         
-        # 横風計算表示（Ver.96を継承）
-        # ... (ここに実測に基づいたメトリックを表示)
+        if actual:
+            u = actual.get("u", 0.0); v = actual.get("v", 0.0); spd = actual.get("speed", 0.0)
+            cw = calculate_crosswind(u, v, runway_heading)
+            cw_pct = (abs(cw) / launch_limit) * 100
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("風速 (m/s)", f"{spd}")
+            m2.metric("横風成分 (m/s)", f"{abs(cw)}", delta="左から" if cw > 0 else "右から")
+            m3.metric("限界到達度", f"{cw_pct:.1f} %")
+            
+            # 安全判定
+            if cw_pct > 100: st.error(f"🚨 横風限界超過 ({cw_pct:.1f}%)")
+            elif cw_pct > 80: st.warning(f"⚠️ 限界接近 ({cw_pct:.1f}%)")
+            else: st.success(f"✅ 発進可能 ({cw_pct:.1f}%)")
+            
+            # 簡易マップ表示
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.set_facecolor('#E3F2FD')
+            for sid, info in AMEDAS_STATIONS.items():
+                ax.plot(info["lon"], info["lat"], 'o', color='#1A237E')
+                if amedas and sid in amedas["stations"]:
+                    s = amedas["stations"][sid]
+                    ax.text(info["lon"], info["lat"]-0.01, f"{s['name']}\n{s['speed']}m/s", ha='center', fontsize=8)
+            st.pyplot(fig)
+        else:
+            st.info("データがありません。サイドバーから更新してください。")
 
-# --- 他のタブはVer.96を継承 ---
+# --- タブ3: SCW入力 (Phase 3 堅牢版) ---
+with tab3:
+    st.subheader("🖊️ SCW 要約値入力")
+    with st.form("scw_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            t_t = st.selectbox("対象時刻", [f"{h:02d}:{m:02d}" for h in range(4, 20) for m in [0, 30]])
+            loc = st.selectbox("地点", ["彦根沖", "今津沖", "長浜沖", "南小松沖"])
+        with col2:
+            clock = st.selectbox("風向(時)", range(1, 13), index=11)
+            spd = st.number_input("風速(m/s)", step=0.1)
+        if st.form_submit_button("予報を登録"):
+            u, v = clock_to_uv(clock, spd)
+            data = load_data_safe(SCW_DATA_FILE, [])
+            data.append({"time": t_t, "location": loc, "speed": spd, "u": u, "v": v})
+            save_data_safe(SCW_DATA_FILE, data); st.rerun()
+
+# --- タブ4: 実測報告 (Phase 3 堅牢版) ---
+with tab4:
+    st.subheader(f"🚩 現地実測報告 【{current_run}】")
+    if "rep_clock" not in st.session_state: st.session_state["rep_clock"] = 12
+    col1, col2 = st.columns(2)
+    with col1: loc = st.selectbox("観測地点", ["プラットホーム", "風見船A", "風見船B"])
+    with col2: obs_t = st.time_input("観測時刻")
+    
+    st.write("風向き (時)")
+    btn_cols = st.columns(5)
+    for i, h in enumerate([10, 11, 12, 1, 2]):
+        if btn_cols[i].button(f"{h}時", type="primary" if st.session_state["rep_clock"] == h else "secondary", use_container_width=True):
+            st.session_state["rep_clock"] = h; st.rerun()
+    
+    spd = st.number_input("平均風速 (m/s)", step=0.1, key="rep_spd")
+    if st.button("実測を送信", type="primary", use_container_width=True):
+        u, v = clock_to_uv(st.session_state["rep_clock"], spd)
+        data = load_data_safe(REPORT_DATA_FILE, [])
+        data.append({"time": obs_t.strftime("%H:%M"), "location": loc, "speed": spd, "u": u, "v": v, "run": current_run})
+        save_data_safe(REPORT_DATA_FILE, data); st.success("報告完了"); time.sleep(1); st.rerun()
+
+# --- タブ5: 発進判定 ---
+with tab5:
+    st.subheader("🚀 発進判定ログ")
+    with st.form("judge_form"):
+        status = st.radio("判定", ["🔴 STAY", "🟡 CAUTION", "🟢 GO"], horizontal=True)
+        reason = st.text_area("理由")
+        if st.form_submit_button("判定記録"):
+            data = load_data_safe(JUDGE_DATA_FILE, [])
+            data.append({"time": datetime.now().strftime("%H:%M"), "run": current_run, "status": status, "reason": reason})
+            save_data_safe(JUDGE_DATA_FILE, data); st.rerun()
+    
+    hist = load_data_safe(JUDGE_DATA_FILE, [])
+    for h in reversed(hist):
+        st.write(f"**[{h.get('time')}] {h.get('status')}** ({h.get('run')})")
+        st.caption(h.get('reason'))
+        st.divider()
+
+# --- タブ2: 予報比較 (安定版) ---
+with tab2:
+    st.subheader("📊 予報比較タイムライン")
+    scw = load_data_safe(SCW_DATA_FILE, [])
+    reps = load_data_safe(REPORT_DATA_FILE, [])
+    msm = load_data_safe(MSM_DATA_FILE, []) # MSMが取得済みの時のみ表示
+    
+    combined = []
+    for s in scw: combined.append({"時刻": s.get("time"), "ソース": "SCW予報", "風速": s.get("speed"), "地点": s.get("location")})
+    for r in reps: combined.append({"時刻": r.get("time"), "ソース": "実測報告", "風速": r.get("speed"), "地点": r.get("location")})
+    for m in msm: combined.append({"時刻": m.get("time"), "ソース": "MSM(予)", "風速": m.get("speed"), "地点": m.get("location")})
+    
+    if combined:
+        st.dataframe(pd.DataFrame(combined).sort_values("時刻"), use_container_width=True)
+    else:
+        st.info("データがありません。")
