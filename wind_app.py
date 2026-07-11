@@ -5,15 +5,18 @@ import time
 import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
+import math
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import numpy as np
-import matplotlib_fontja
 
 # ==========================================
 # ⚙️ 基本設定・定数
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE_AMEDAS = os.path.join(BASE_DIR, "ops_amedas.json")
+SCW_DATA_FILE = os.path.join(BASE_DIR, "ops_scw_data.json")
+CONFIG_FILE = os.path.join(BASE_DIR, "ops_config.json")
+
 # 琵琶湖周辺のアメダス地点定義
 AMEDAS_STATIONS = {
     "60131": {"name": "彦根", "lat": 35.2750, "lon": 136.2467},
@@ -23,38 +26,31 @@ AMEDAS_STATIONS = {
     "60216": {"name": "大津", "lat": 35.0150, "lon": 135.8750},
     "60111": {"name": "今津", "lat": 35.4117, "lon": 136.0350}
 }
+DIR_16_NAMES = ["無風", "北北東", "北東", "東北東", "東", "東南東", "南東", "南南東", "南", "南南西", "南西", "西南西", "西", "西北西", "北西", "北北西", "北"]
 
-# ファイルパス
-DATA_FILE_AMEDAS = os.path.join(BASE_DIR, "ops_amedas.json")
-DATA_FILE_REPORT = os.path.join(BASE_DIR, "ops_report.json")
-CONFIG_FILE = os.path.join(BASE_DIR, "ops_config.json")
-
-REFRESH_RATE = 10 # 秒 (アメダス監視用)
+# SCW入力用の選択肢
+SCW_LOCATIONS = ["彦根沖", "長浜沖", "今津沖", "南小松沖", "その他"]
+SCW_CONFIDENCE = ["高 (High)", "中 (Mid)", "低 (Low)"]
+CLOCK_LABELS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
 # ==========================================
-# 📡 AMeDAS 自動取得ロジック (Phase 1 核心)
+# 📡 AMeDAS 自動取得ロジック (Ver.90より復元)
 # ==========================================
 def fetch_amedas_latest():
     """気象庁JSONから最新のアメダスデータを取得・保存"""
     try:
-        # 1. 最新の観測時刻を確認
         time_url = "https://www.jma.go.jp/bosai/amedas/data/latest_time.txt"
         latest_time_str = requests.get(time_url).text.strip()
-        # 例: 2024-05-20T10:10:00+09:00 -> 20240520101000
         dt = datetime.fromisoformat(latest_time_str)
         time_key = dt.strftime("%Y%m%d%H%M%S")
         
-        # 2. その時刻の全国データを取得
         data_url = f"https://www.jma.go.jp/bosai/amedas/data/map/{time_key}.json"
         all_data = requests.get(data_url).json()
         
-        # 3. 必要な地点だけ抽出
         extracted = {"observed": latest_time_str, "stations": {}}
         for st_id, info in AMEDAS_STATIONS.items():
             if st_id in all_data:
                 s_data = all_data[st_id]
-                # 風向(deg), 風速(m/s)を抽出 (wndDir, wind)
-                # 気象庁の風向は16方位(0-16)で来るため変換が必要な場合があるが、まずはそのまま保持
                 extracted["stations"][st_id] = {
                     "name": info["name"],
                     "wind_speed": s_data.get("wind", [None])[0],
@@ -62,7 +58,6 @@ def fetch_amedas_latest():
                     "temp": s_data.get("temp", [None])[0]
                 }
         
-        # 4. 保存
         with open(DATA_FILE_AMEDAS, "w", encoding="utf-8") as f:
             json.dump(extracted, f, ensure_ascii=False, indent=2)
         return True
@@ -72,22 +67,17 @@ def fetch_amedas_latest():
 
 def load_amedas():
     if not os.path.exists(DATA_FILE_AMEDAS): return None
-    with open(DATA_FILE_AMEDAS, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(DATA_FILE_AMEDAS, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return None
 
-#方位変換用（アメダスの1方位=22.5度）
-DIR_16_NAMES = ["無風", "北北東", "北東", "東北東", "東", "東南東", "南東", "南南東", "南", "南南西", "南西", "西南西", "西", "西北西", "北西", "北北西", "北"]
-
-# ==========================================
-# 📊 描画系
-# ==========================================
 def draw_ops_map(amedas_data, reports):
-    # Phase 1では簡易的なリスト表示と地図の枠組みだけ
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.set_facecolor('#E3F2FD') # 琵琶湖っぽい青
-    ax.set_title("Lake Biwa Wind Overview (Phase 1)", fontsize=15)
+    ax.set_facecolor('#E3F2FD') 
+    ax.set_title("Lake Biwa Wind Overview", fontsize=15)
     
-    # 簡易的にアメダス地点をプロット
     for st_id, info in AMEDAS_STATIONS.items():
         ax.plot(info["lon"], info["lat"], 'o', color='#1A237E', markersize=10)
         ax.text(info["lon"]+0.01, info["lat"], info["name"], fontsize=12)
@@ -103,11 +93,49 @@ def draw_ops_map(amedas_data, reports):
     return fig
 
 # ==========================================
+# 🖊️ SCW データ管理ロジック (Ver.92より継承)
+# ==========================================
+def load_scw_data():
+    if not os.path.exists(SCW_DATA_FILE): return []
+    try:
+        with open(SCW_DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except: return []
+
+def save_scw_data(publish_time, target_time, location, clock_dir, speed, confidence, memo):
+    current_data = load_scw_data()
+    
+    # 正規化（u, vベクトル変換）
+    angle_rad = math.radians(90 - (clock_dir * 30))
+    u_comp = -speed * math.sin(angle_rad)
+    v_comp = -speed * math.cos(angle_rad)
+
+    new_entry = {
+        "id": str(time.time()),
+        "publish_time": publish_time,
+        "target_time": target_time,
+        "location": location,
+        "clock_dir": clock_dir,
+        "speed": speed,
+        "u": round(u_comp, 2),
+        "v": round(v_comp, 2),
+        "confidence": confidence,
+        "memo": memo,
+        "updated_at": datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S')
+    }
+    
+    current_data.append(new_entry)
+    try:
+        with open(SCW_DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(current_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"保存エラー: {e}")
+
+# ==========================================
 # 🚀 メイン UI
 # ==========================================
-st.set_page_config(page_title="Birdman Wind Ops", layout="wide")
-
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.90</small>", unsafe_allow_html=True)
+st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.93</small>", unsafe_allow_html=True)
 
 # サイドバー：全体共有設定
 with st.sidebar:
@@ -115,24 +143,25 @@ with st.sidebar:
     current_run = st.selectbox("対象フライト", [f"{i}走目" for i in range(1, 21)])
     launch_limit = st.number_input("横風限界 (m/s)", value=3.0, step=0.5)
     
-    if st.button("アメダス強制更新"):
+    st.write("---")
+    if st.button("📡 アメダス強制更新", use_container_width=True):
         if fetch_amedas_latest():
             st.success("更新完了")
+            time.sleep(1)
             st.rerun()
 
-# --- タブ構造の実装 ---
+# 5つのタブ構成
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🧭 現在状況", 
     "📊 予報比較", 
     "🖊️ SCW入力", 
     "🚩 実測報告", 
-    "⚙️ 設定"
+    "🚀 発進判定"
 ])
 
-# --- タブ1: 現在状況 (判断者用) ---
+# --- タブ1: 現在状況 (AMeDAS表示復元) ---
 with tab1:
     col_map, col_data = st.columns([2, 1])
-    
     amedas_latest = load_amedas()
     
     with col_map:
@@ -155,32 +184,56 @@ with tab1:
                 })
             st.table(pd.DataFrame(df_list))
         else:
-            st.warning("アメダスデータがまだ取得されていません。")
+            st.warning("アメダスデータがまだ取得されていません。サイドバーから更新してください。")
 
-# --- タブ2: 予報比較 (気象担当用) ---
+# --- タブ2: 予報比較 ---
 with tab2:
+    st.subheader("予報モデル比較 (開発中)")
     st.info("Phase 2 で実装予定: MSM予報データと実測のズレを視覚化します。")
 
-# --- タブ3: SCW入力 (気象担当用) ---
+# --- タブ3: SCW入力 (Ver.92より継承) ---
 with tab3:
-    st.info("Phase 3 で実装予定: SCW(LFM)の要約値を手入力するフォームを設置します。")
+    st.markdown("## 🖊️ SCW (LFM) 要約値入力")
+    st.caption("局地モデルの風速・風向分布を目視確認し、要約値を手入力します。")
+    
+    with st.form("scw_input_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            publish_time = st.time_input("予報発表時刻 (例: 13:40更新)")
+            target_time = st.selectbox("対象時刻", ["14:30", "15:00", "15:30", "16:00", "16:30"])
+            location = st.selectbox("対象地点", SCW_LOCATIONS)
+        
+        with col2:
+            clock_dir = st.selectbox("風向 (時計)", CLOCK_LABELS, index=0, format_func=lambda x: f"{x}時の方向")
+            speed = st.number_input("風速 (m/s)", min_value=0.0, max_value=20.0, step=0.1, value=1.0)
+            confidence = st.selectbox("信頼度", SCW_CONFIDENCE)
+            
+        memo = st.text_input("メモ・コメント (強化時刻や前倒しの兆候など)")
+        
+        submitted = st.form_submit_button("💾 SCWデータを記録・正規化する", type="primary", use_container_width=True)
+        
+        if submitted:
+            save_scw_data(publish_time.strftime('%H:%M'), target_time, location, clock_dir, speed, confidence, memo)
+            st.success(f"{location} の {target_time} 予測データを登録しました！")
 
-# --- タブ4: 実測報告 (観測班用) ---
+    st.write("---")
+    st.markdown("### 📋 登録済みのSCWデータ")
+    saved_scw = load_scw_data()
+    if saved_scw:
+        for item in reversed(saved_scw[-5:]):
+            st.markdown(f"**{item['target_time']}** | 📍 {item['location']} | 🧭 {item['clock_dir']}時 {item['speed']}m/s | 信頼度: {item['confidence']}")
+            if item['memo']:
+                st.caption(f"📝 {item['memo']}")
+            st.divider()
+    else:
+        st.info("まだ登録されたデータはありません。")
+
+# --- タブ4: 実測報告 ---
 with tab4:
-    st.subheader(f"🚩 現地実測報告フォーム ({current_run})")
-    st.markdown("以前のアプリのUIをここに統合します。")
-    # ここにVer.89の入力ロジックを移植予定
-    with st.expander("入力プロトタイプ", expanded=True):
-        st.number_input("地点 (m)", value=0, step=50)
-        st.columns(5) # 風速ボタンなどの配置
-        st.button("送信", type="primary")
+    st.subheader("🚩 現地実測報告")
+    st.info("Phase 3 にて、以前作成した滑走路用の直感的な風向・風速入力UIをここに完全移植します。")
 
-# --- タブ5: 設定 ---
+# --- タブ5: 発進判定 ---
 with tab5:
-    st.subheader("システム設定")
-    if st.button("全データを初期化"):
-        st.warning("実装中...")
-
-# 自動更新の仕組み
-st.caption(f"自動更新まであと数秒...")
-time.sleep(1) # 本番は st_autorefresh などを使用検討
+    st.subheader("🚀 発進・経路判断 (開発中)")
