@@ -18,7 +18,9 @@ except ImportError:
 # ==========================================
 # ⚙️ 設定・パス
 # ==========================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))import streamlit as st
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_AMEDAS = os.path.join(BASE_DIR, "ops_amedas.json")
+DB_FORECAST = os.path.join(BASE_DIR, "ops_forecast.json")
 import json
 import os
 import time
