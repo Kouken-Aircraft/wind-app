@@ -92,7 +92,7 @@ def fetch_amedas():
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.103</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.104</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -106,10 +106,12 @@ with st.sidebar:
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🧭 現在状況", "📊 予報比較", "🖊️ 予報入力", "🚩 実測報告", "🚀 発進判定"])
 
-# --- タブ1: 現在状況 (マップの英字化) ---
+# --- タブ1: 現在状況 (マップの英字化 + SCW予報追加) ---
 with tab1:
     amedas = load_db(DB_AMEDAS, None)
     reps = load_db(DB_REPORT, [])
+    forecasts = load_db(DB_FORECAST, [])
+    
     col_l, col_r = st.columns([2, 1])
     
     with col_l:
@@ -118,6 +120,7 @@ with tab1:
         ax.set_facecolor('#E3F2FD')
         ax.set_title("Lake Biwa Wind Map (m/s)", fontsize=16)
         
+        # ① AMeDAS実況の描画 (青)
         if amedas and "stations" in amedas:
             for sid, s in amedas["stations"].items():
                 pos = STATIONS.get(sid)
@@ -127,15 +130,27 @@ with tab1:
                     ax.text(pos["lon"], pos["lat"]-0.012, f"{pos['name']}\n{s.get('speed', 0)}", 
                             ha='center', fontsize=10, fontweight='bold')
         
+        # ② 実測報告の描画 (赤)
         if reps:
             lr = reps[-1]
+            # プラットフォーム付近(彦根寄り)に描画
             ax.quiver(136.24, 35.27, lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25)
             ax.text(136.24, 35.25, "REPORT", color='red', fontweight='bold', ha='center', fontsize=10)
+
+        # 🌟③ SCW予報の描画 (緑)
+        scw_list = [f for f in forecasts if f.get("src") == "SCW"]
+        if scw_list:
+            latest_scw = scw_list[-1] # 最新の入力データを取得
+            # マップ中央付近に描画して比較しやすくする
+            scw_lon, scw_lat = 136.14, 35.31
+            ax.quiver(scw_lon, scw_lat, latest_scw.get("u", 0.0), latest_scw.get("v", 0.0), color='green', scale=25)
+            ax.text(scw_lon, scw_lat - 0.012, f"SCW({latest_scw.get('time')})\n{latest_scw.get('speed')}", 
+                    color='green', fontweight='bold', ha='center', fontsize=10)
         
         ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
         st.pyplot(fig)
-        st.caption("※青矢印=AMeDAS実況 / 赤矢印=現地報告")
+        st.caption("※青矢印=AMeDAS実況 / 赤矢印=現地報告 / 緑矢印=最新SCW予報")
 
     with col_r:
         st.subheader("横風判定")
