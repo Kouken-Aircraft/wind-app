@@ -6,11 +6,12 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 import math
 import matplotlib.pyplot as plt
-import numpy as np
 
 # ==========================================
-# ⚙️ 設定・パス
+# ⚙️ 設定・パス・時刻 (日本時間 JST を強制)
 # ==========================================
+JST = timezone(timedelta(hours=+9), 'JST')
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_AMEDAS = os.path.join(BASE_DIR, "ops_amedas.json")
 DB_AMEDAS_HIST = os.path.join(BASE_DIR, "ops_amedas_hist.json")
@@ -18,7 +19,7 @@ DB_FORECAST = os.path.join(BASE_DIR, "ops_forecast.json")
 DB_REPORT = os.path.join(BASE_DIR, "ops_report.json")
 DB_JUDGE = os.path.join(BASE_DIR, "ops_judge.json")
 
-# AMeDAS 観測地点
+# AMeDAS 観測地点 (英語統一)
 STATIONS = {
     "60131": {"name": "Hikone", "lat": 35.2750, "lon": 136.2467},
     "60026": {"name": "Nagahama", "lat": 35.3850, "lon": 136.2650},
@@ -26,16 +27,22 @@ STATIONS = {
     "60191": {"name": "M-Komatsu", "lat": 35.2400, "lon": 135.9633}
 }
 
-# 🌟 文字化け防止のため、座標キーをすべて英語化
+# 描画用座標 (UIの日本語と紐付け)
 OFFSHORE_COORDS = {
-    "Hikone-Off": {"lat": 35.28, "lon": 136.20},
-    "Nagahama-Off": {"lat": 35.35, "lon": 136.22},
-    "Imazu-Off": {"lat": 35.38, "lon": 136.08},
-    "M-Komatsu-Off": {"lat": 35.25, "lon": 136.00},
-    "Platform": {"lat": 35.2750, "lon": 136.2467},
-    "Boat-A": {"lat": 35.35, "lon": 136.18},
-    "Boat-B": {"lat": 35.20, "lon": 136.18},
-    "Custom": {"lat": 35.27, "lon": 136.22}
+    "彦根沖": {"lat": 35.28, "lon": 136.20},
+    "長浜沖": {"lat": 35.35, "lon": 136.22},
+    "今津沖": {"lat": 35.38, "lon": 136.08},
+    "南小松沖": {"lat": 35.25, "lon": 136.00},
+    "会場(PH)": {"lat": 35.2750, "lon": 136.2467},
+    "船A(北)": {"lat": 35.35, "lon": 136.18},
+    "船B(南)": {"lat": 35.20, "lon": 136.18},
+    "任意地点": {"lat": 35.27, "lon": 136.22}
+}
+
+# 🌟 文字化け防止フィルター (古い日本語データを英語に強制変換)
+EN_MAP = {
+    "会場(PH)": "Platform", "船A(北)": "Boat-A", "船B(南)": "Boat-B", "任意地点": "Custom",
+    "彦根沖": "Hikone-Off", "長浜沖": "Nagahama-Off", "今津沖": "Imazu-Off", "南小松沖": "M-Komatsu-Off"
 }
 
 # ==========================================
@@ -86,6 +93,7 @@ def save_db(path, data):
 # ==========================================
 def fetch_amedas():
     try:
+        # AMeDASは気象庁のUTC基準時間を取得して利用する
         t_url = "https://www.jma.go.jp/bosai/amedas/data/latest_time.txt"
         t_str = requests.get(t_url, timeout=5).text.strip()
         t_key = datetime.fromisoformat(t_str).strftime("%Y%m%d%H%M%S")
@@ -115,7 +123,7 @@ def fetch_amedas():
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.110 (Anti-Mojibake)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.111 (JST & Anti-Mojibake)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -142,6 +150,8 @@ with tab1:
         st.subheader("琵琶湖 統合風況マップ")
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.set_facecolor('#E3F2FD')
+        
+        # グラフ内部は完全に英語化して文字化けを排除
         ax.set_title("Lake Biwa Wind Map (m/s)", fontsize=16)
 
         # ① AMeDAS実況 (青)
@@ -157,23 +167,27 @@ with tab1:
         # ② 実測報告 (赤)
         if reps:
             lr = reps[-1]
-            rep_pos = OFFSHORE_COORDS.get(lr.get("loc", "Platform"))
-            if rep_pos is None: rep_pos = OFFSHORE_COORDS["Platform"]
+            raw_loc = lr.get("loc", "会場(PH)")
+            safe_loc_en = EN_MAP.get(raw_loc, "Unknown") # 日本語を英語に変換
+            rep_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["会場(PH)"])
+            
             ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25)
-            ax.text(rep_pos["lon"], rep_pos["lat"]-0.012, f"REPORT({lr.get('loc')})\n{lr.get('speed')}", 
+            ax.text(rep_pos["lon"], rep_pos["lat"]-0.012, f"REPORT({safe_loc_en})\n{lr.get('speed')}", 
                     color='red', fontweight='bold', ha='center', fontsize=10)
 
         # ③ SCW/MSM予報 (緑)
         if forecasts:
             latest_fore = forecasts[-1]
-            fore_pos = OFFSHORE_COORDS.get(latest_fore.get("loc_name", "Hikone-Off"))
-            if fore_pos is None: fore_pos = OFFSHORE_COORDS["Hikone-Off"]
+            raw_loc = latest_fore.get("loc_name", "彦根沖")
+            safe_loc_en = EN_MAP.get(raw_loc, "Unknown") # 日本語を英語に変換
+            fore_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["彦根沖"])
+            
             ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='green', scale=25)
             ax.text(fore_pos["lon"], fore_pos["lat"] - 0.012, f"{latest_fore.get('src')}({latest_fore.get('target_time')})\n{latest_fore.get('speed')}", 
                     color='green', fontweight='bold', ha='center', fontsize=10)
         
         # ④ PH離陸方位 (黒)
-        ph_lon, ph_lat = OFFSHORE_COORDS["Platform"]["lon"], OFFSHORE_COORDS["Platform"]["lat"]
+        ph_lon, ph_lat = OFFSHORE_COORDS["会場(PH)"]["lon"], OFFSHORE_COORDS["会場(PH)"]["lat"]
         r_rad = math.radians(runway_heading)
         ru, rv = 0.04 * math.sin(r_rad), 0.04 * math.cos(r_rad)
         ax.quiver(ph_lon, ph_lat, ru, rv, color='black', scale=1, scale_units='xy', angles='xy', width=0.006, headwidth=4)
@@ -182,7 +196,9 @@ with tab1:
         ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
         st.pyplot(fig)
-        st.caption("※Blue=AMeDAS / Red=Report / Green=Forecast / Black=Launch Dir")
+        
+        # Streamlitの機能なら日本語を使っても文字化けしない
+        st.caption("※青=AMeDAS実況 / 赤=現地報告 / 緑=手入力予報(SCW/MSM) / 黒=離陸方位")
 
     with col_r:
         st.subheader("横風判定")
@@ -205,16 +221,15 @@ with tab1:
 # --- タブ3: 予報入力 ---
 with tab3:
     st.subheader("🖊️ 予報値入力 (SCW / LFM / MSM)")
-    st.info("※負荷対策のため、MSM等の予報データは担当者が目視確認して手入力する運用です。")
     with st.form("fore_form"):
         c1, c2, c3 = st.columns(3)
         with c1: 
             src = st.selectbox("種別", ["SCW", "MSM", "LFM"])
-            issue_time = st.time_input("予報発表時刻 (更新時刻)")
+            # 🌟 初期値をJSTに設定
+            issue_time = st.time_input("予報発表時刻 (更新時刻)", value=datetime.now(JST).time())
             target_time = st.selectbox("対象時刻", [f"{h:02d}:{m:02d}" for h in range(4, 20) for m in [0, 30]])
         with c2:
-            # 🌟 グラフ描画用に英語名を使用
-            loc_name = st.selectbox("地点", ["Hikone-Off", "Nagahama-Off", "Imazu-Off", "M-Komatsu-Off"])
+            loc_name = st.selectbox("地点", ["彦根沖", "長浜沖", "今津沖", "南小松沖"])
             clock = st.selectbox("風向(時)", range(1, 13), index=11)
             spd = st.number_input("風速(m/s)", step=0.1)
         with c3:
@@ -241,14 +256,17 @@ with tab4:
     with st.container():
         c1, c2, c3 = st.columns(3)
         with c1: 
-            # 🌟 グラフ描画用に英語名を使用
-            loc = st.selectbox("地点ID", ["Platform", "Boat-A", "Boat-B", "Custom"])
-            obs_t = st.time_input("観測時刻 (自動入力/修正可)")
+            loc = st.selectbox("地点ID", ["会場(PH)", "船A(北)", "船B(南)", "任意地点"])
+            # 🌟 初期値をJSTに設定
+            obs_t = st.time_input("観測時刻 (自動入力/修正可)", value=datetime.now(JST).time())
         with c2:
             st.write("平均風向 (時)")
-            btn_cols = st.columns(5)
-            for i, h in enumerate([10, 11, 12, 1, 2]):
-                if btn_cols[i].button(f"{h}時", type="primary" if st.session_state["rep_clock"]==h else "secondary", key=f"r_{h}"):
+            # 🌟 1から12時まですべて対応する2段組みボタン
+            btn_cols1 = st.columns(6)
+            btn_cols2 = st.columns(6)
+            for i, h in enumerate(range(1, 13)):
+                target_col = btn_cols1 if i < 6 else btn_cols2
+                if target_col[i % 6].button(f"{h}", type="primary" if st.session_state["rep_clock"]==h else "secondary", key=f"r_{h}"):
                     st.session_state["rep_clock"] = h
                     st.rerun()
             spd = st.number_input("平均風速 (m/s)", step=0.1)
@@ -277,7 +295,8 @@ with tab5:
         txt = st.text_area("理由 (誰が・いつ・何を見て決めたか)")
         if st.form_submit_button("判定を記録"):
             db = load_db(DB_JUDGE)
-            db.append({"time": datetime.now().strftime("%H:%M"), "run": current_run, "res": res, "txt": txt})
+            # 🌟 記録時刻もJST
+            db.append({"time": datetime.now(JST).strftime("%H:%M"), "run": current_run, "res": res, "txt": txt})
             save_db(DB_JUDGE, db); st.rerun()
     for h in reversed(load_db(DB_JUDGE)):
         st.write(f"**[{h.get('time')}] {h.get('res')}** ({h.get('run')})"); st.caption(h.get('txt')); st.divider()
