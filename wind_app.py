@@ -121,7 +121,7 @@ def fetch_amedas():
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.106 (Spec Aligned)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.106.1 (Bug Fix)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -159,19 +159,25 @@ with tab1:
                     ax.text(pos["lon"], pos["lat"]-0.012, f"{pos['name']}\n{s.get('speed', 0)}", 
                             ha='center', fontsize=10, fontweight='bold')
         
-        # ② 実測報告 (赤) - 仕様書の場所にプロット
+        # ② 実測報告 (赤) - 🌟エラー対策追加
         if reps:
             lr = reps[-1]
             rep_pos = OFFSHORE_COORDS.get(lr.get("loc", "会場(PH)"))
+            if rep_pos is None: # 古いデータ対策
+                rep_pos = OFFSHORE_COORDS["会場(PH)"]
+                
             ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25)
             ax.text(rep_pos["lon"], rep_pos["lat"]-0.012, f"REPORT({lr.get('loc')})\n{lr.get('speed')}", 
                     color='red', fontweight='bold', ha='center', fontsize=10)
 
-        # ③ SCW予報 (緑) - 仕様書の沖合にプロット
+        # ③ SCW予報 (緑) - 🌟エラー対策追加
         scw_list = [f for f in forecasts if f.get("src") == "SCW"]
         if scw_list:
             latest_scw = scw_list[-1]
             scw_pos = OFFSHORE_COORDS.get(latest_scw.get("loc_name", "彦根沖"))
+            if scw_pos is None: # 古いデータ対策
+                scw_pos = OFFSHORE_COORDS["彦根沖"]
+                
             ax.quiver(scw_pos["lon"], scw_pos["lat"], latest_scw.get("u", 0.0), latest_scw.get("v", 0.0), color='green', scale=25)
             ax.text(scw_pos["lon"], scw_pos["lat"] - 0.012, f"SCW({latest_scw.get('target_time')})\n{latest_scw.get('speed')}", 
                     color='green', fontweight='bold', ha='center', fontsize=10)
@@ -206,7 +212,7 @@ with tab1:
         else:
             st.info("データ未取得。サイドバーから更新してください。")
 
-# --- タブ3: 予報入力 (仕様書 Page 7 準拠) ---
+# --- タブ3: 予報入力 ---
 with tab3:
     st.subheader("🖊️ 予報値入力 (SCW / LFM / MSM)")
     with st.form("fore_form"):
@@ -235,7 +241,7 @@ with tab3:
             st.success("予報を記録しました。マップに反映されます。")
             st.rerun()
 
-# --- タブ4: 実測報告 (仕様書 Page 8 準拠) ---
+# --- タブ4: 実測報告 ---
 with tab4:
     st.subheader(f"🚩 現地実測報告 【{current_run}】")
     if "rep_clock" not in st.session_state: st.session_state["rep_clock"] = 12
@@ -254,7 +260,6 @@ with tab4:
                     st.rerun()
             spd = st.number_input("平均風速 (m/s)", step=0.1)
         with c3:
-            # 未測はNoneにして空欄表現
             gust = st.number_input("最大瞬間風速 (m/s) ※未測は空欄", value=None, step=0.1)
             method = st.selectbox("観測方法", ["風速計(採用候補)", "体感(参考)", "旗"])
         
