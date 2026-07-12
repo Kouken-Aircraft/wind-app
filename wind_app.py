@@ -93,7 +93,6 @@ def save_db(path, data):
 # ==========================================
 def fetch_amedas():
     try:
-        # AMeDASは気象庁のUTC基準時間を取得して利用する
         t_url = "https://www.jma.go.jp/bosai/amedas/data/latest_time.txt"
         t_str = requests.get(t_url, timeout=5).text.strip()
         t_key = datetime.fromisoformat(t_str).strftime("%Y%m%d%H%M%S")
@@ -123,7 +122,7 @@ def fetch_amedas():
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.111 (JST & Anti-Mojibake)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.112 (OOM Fixed)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -195,9 +194,11 @@ with tab1:
         
         ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
-        st.pyplot(fig)
         
-        # Streamlitの機能なら日本語を使っても文字化けしない
+        # Streamlitに画像として渡し、直後にメモリから完全に削除（クラッシュ対策）
+        st.pyplot(fig)
+        plt.close(fig) # 🌟 ここが超重要！メモリリークを防ぎ、サーバークラッシュを根絶します。
+        
         st.caption("※青=AMeDAS実況 / 赤=現地報告 / 緑=手入力予報(SCW/MSM) / 黒=離陸方位")
 
     with col_r:
@@ -225,7 +226,6 @@ with tab3:
         c1, c2, c3 = st.columns(3)
         with c1: 
             src = st.selectbox("種別", ["SCW", "MSM", "LFM"])
-            # 🌟 初期値をJSTに設定
             issue_time = st.time_input("予報発表時刻 (更新時刻)", value=datetime.now(JST).time())
             target_time = st.selectbox("対象時刻", [f"{h:02d}:{m:02d}" for h in range(4, 20) for m in [0, 30]])
         with c2:
@@ -257,11 +257,10 @@ with tab4:
         c1, c2, c3 = st.columns(3)
         with c1: 
             loc = st.selectbox("地点ID", ["会場(PH)", "船A(北)", "船B(南)", "任意地点"])
-            # 🌟 初期値をJSTに設定
             obs_t = st.time_input("観測時刻 (自動入力/修正可)", value=datetime.now(JST).time())
         with c2:
             st.write("平均風向 (時)")
-            # 🌟 1から12時まですべて対応する2段組みボタン
+            # 1から12時まですべて対応する2段組みボタン
             btn_cols1 = st.columns(6)
             btn_cols2 = st.columns(6)
             for i, h in enumerate(range(1, 13)):
@@ -295,7 +294,6 @@ with tab5:
         txt = st.text_area("理由 (誰が・いつ・何を見て決めたか)")
         if st.form_submit_button("判定を記録"):
             db = load_db(DB_JUDGE)
-            # 🌟 記録時刻もJST
             db.append({"time": datetime.now(JST).strftime("%H:%M"), "run": current_run, "res": res, "txt": txt})
             save_db(DB_JUDGE, db); st.rerun()
     for h in reversed(load_db(DB_JUDGE)):
