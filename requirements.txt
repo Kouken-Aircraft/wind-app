@@ -2,3 +2,5 @@ streamlit
 matplotlib
 matplotlib-fontja
 japanize-matplotlib
+xarray
+netCDF4
