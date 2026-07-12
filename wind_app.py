@@ -23,7 +23,6 @@ DB_AMEDAS_HIST = os.path.join(BASE_DIR, "ops_amedas_hist.json")
 DB_FORECAST = os.path.join(BASE_DIR, "ops_forecast.json")
 DB_REPORT = os.path.join(BASE_DIR, "ops_report.json")
 DB_JUDGE = os.path.join(BASE_DIR, "ops_judge.json")
-DB_MSM = os.path.join(BASE_DIR, "ops_msm.json")
 
 # AMeDAS 観測地点
 STATIONS = {
@@ -33,14 +32,7 @@ STATIONS = {
     "60191": {"name": "M-Komatsu", "lat": 35.2400, "lon": 135.9633}
 }
 
-# 琵琶湖代表点 (MSM抽出用)
-MSM_POINTS = {
-    "彦根(MSM)": {"lat": 35.27, "lon": 136.24},
-    "湖北(MSM)": {"lat": 35.42, "lon": 136.18},
-    "西岸(MSM)": {"lat": 35.25, "lon": 135.95}
-}
-
-# 予報(SCW)・実測のマップ描画用ダミー座標
+# 予報(SCW/MSM)・実測のマップ描画用ダミー座標
 OFFSHORE_COORDS = {
     "彦根沖": {"lat": 35.28, "lon": 136.20},
     "長浜沖": {"lat": 35.35, "lon": 136.22},
@@ -96,7 +88,7 @@ def save_db(path, data):
     except: pass
 
 # ==========================================
-# 📡 自動取得エンジン (AMeDAS & MSM)
+# 📡 AMeDAS 自動取得エンジン
 # ==========================================
 def fetch_amedas():
     try:
@@ -125,71 +117,11 @@ def fetch_amedas():
         return True
     except: return False
 
-def fetch_msm_rish():
-    """京都大学RISH NetCDFからxarrayを用いてデータ抽出 (UTC基準の動的URL生成)"""
-    try:
-        import xarray as xr
-    except ImportError:
-        st.error("xarrayまたはnetCDF4がインストールされていません。requirements.txtを確認してください。")
-        return False
-
-    try:
-        # 1. 現在時刻をUTC（協定世界時）で取得
-        now_utc = datetime.now(timezone.utc)
-        year_str = now_utc.strftime("%Y")
-        date_str = now_utc.strftime("%m%d")
-        
-        # 2. URLを動的に結合 (MSM-S 地表面データ)
-        url = f"http://database.rish.kyoto-u.ac.jp/arch/jmadata/data/gpv/netcdf/MSM-S/{year_str}/{date_str}.nc"
-        
-        # 3. xarrayでNetCDFをオープン (※Streamlit Cloud環境では遅延に注意)
-        # HTTP経由で直接読み込みを試行
-        ds = xr.open_dataset(url, engine='netcdf4')
-        
-        # MSMデータは時間軸(time)を持つため、最新の予測時刻(一番最後)を取得
-        latest_ds = ds.isel(time=-1)
-        
-        msm_data = {"time": datetime.now().strftime("%H:%M"), "points": {}}
-        
-        # 4. 指定した琵琶湖代表点ごとに最近傍(nearest)のデータを抽出
-        for name, coords in MSM_POINTS.items():
-            pt = latest_ds.sel(lat=coords["lat"], lon=coords["lon"], method="nearest")
-            
-            u_val = float(pt["u"].values)
-            v_val = float(pt["v"].values)
-            spd = round(math.sqrt(u_val**2 + v_val**2), 1)
-            
-            msm_data["points"][name] = {
-                "lat": coords["lat"], "lon": coords["lon"], 
-                "u": round(u_val, 2), "v": round(v_val, 2), "speed": spd
-            }
-            
-        save_db(DB_MSM, msm_data)
-        st.success(f"RISH MSMデータ ({date_str}.nc) の取得・抽出に成功しました！")
-        return True
-        
-    except Exception as e:
-        # RISHサーバー側の遅延（今日のファイルが未生成）、またはタイムアウト時のフェイルセーフ
-        st.warning(f"RISH接続エラー: {e} | ※直近の成功データまたはダミー値をフォールバックとして使用します。")
-        
-        # 空の場合はアプリクラッシュを防ぐためにダミー乱数を入れる (動作テスト用)
-        msm_data = {"time": datetime.now().strftime("%H:%M"), "points": {}}
-        for name, coords in MSM_POINTS.items():
-            u_val = round(np.random.uniform(-3, 0), 2)
-            v_val = round(np.random.uniform(-3, 0), 2)
-            spd = round(math.sqrt(u_val**2 + v_val**2), 1)
-            msm_data["points"][name] = {
-                "lat": coords["lat"], "lon": coords["lon"], 
-                "u": u_val, "v": v_val, "speed": spd
-            }
-        save_db(DB_MSM, msm_data)
-        return False
-
 # ==========================================
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.108 (RISH xarray Integration)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.109 (Stable Core)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -198,15 +130,10 @@ with st.sidebar:
     launch_limit = st.number_input("横風限界 (m/s)", value=3.0, step=0.1)
     st.write("---")
     
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if st.button("📡 AMeDAS更新", use_container_width=True):
-            if fetch_amedas(): st.success("AMeDAS OK")
-            else: st.error("Fetch Failed")
-    with col_btn2:
-        if st.button("📡 MSM取得(xarray)", use_container_width=True):
-            # 自動取得を実行 (成功/失敗のメッセージは関数内で処理)
-            fetch_msm_rish()
+    # ⚠️ メモリ負荷の高いMSM取得ボタンを削除し、AMeDASのみに集約
+    if st.button("📡 AMeDAS実況を更新", use_container_width=True):
+        if fetch_amedas(): st.success("AMeDAS Update Success")
+        else: st.error("Fetch Failed")
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🧭 現在状況", "📊 予報比較", "🖊️ 予報入力", "🚩 実測報告", "🚀 発進判定"])
 
@@ -215,7 +142,6 @@ with tab1:
     amedas = load_db(DB_AMEDAS, None)
     reps = load_db(DB_REPORT, [])
     forecasts = load_db(DB_FORECAST, [])
-    msm_db = load_db(DB_MSM, None)
     
     col_l, col_r = st.columns([2, 1])
     
@@ -224,13 +150,6 @@ with tab1:
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.set_facecolor('#E3F2FD')
         ax.set_title("Lake Biwa Wind Map (m/s)", fontsize=16)
-        
-        # 🌟⑤ MSM背景場 (紫)
-        if msm_db and "points" in msm_db:
-            for name, m in msm_db["points"].items():
-                ax.quiver(m["lon"], m["lat"], m["u"], m["v"], color='purple', scale=25, alpha=0.5, width=0.008)
-                ax.text(m["lon"], m["lat"]-0.012, f"{name}\n{m['speed']}", 
-                        color='purple', ha='center', fontsize=9, fontweight='bold', alpha=0.7)
 
         # ① AMeDAS実況 (青)
         if amedas and "stations" in amedas:
@@ -251,14 +170,13 @@ with tab1:
             ax.text(rep_pos["lon"], rep_pos["lat"]-0.012, f"REPORT({lr.get('loc')})\n{lr.get('speed')}", 
                     color='red', fontweight='bold', ha='center', fontsize=10)
 
-        # ③ SCW予報 (緑)
-        scw_list = [f for f in forecasts if f.get("src") == "SCW"]
-        if scw_list:
-            latest_scw = scw_list[-1]
-            scw_pos = OFFSHORE_COORDS.get(latest_scw.get("loc_name", "彦根沖"))
-            if scw_pos is None: scw_pos = OFFSHORE_COORDS["彦根沖"]
-            ax.quiver(scw_pos["lon"], scw_pos["lat"], latest_scw.get("u", 0.0), latest_scw.get("v", 0.0), color='green', scale=25)
-            ax.text(scw_pos["lon"], scw_pos["lat"] - 0.012, f"SCW({latest_scw.get('target_time')})\n{latest_scw.get('speed')}", 
+        # ③ SCW/MSM予報 (緑) - 手入力された最新データを表示
+        if forecasts:
+            latest_fore = forecasts[-1]
+            fore_pos = OFFSHORE_COORDS.get(latest_fore.get("loc_name", "彦根沖"))
+            if fore_pos is None: fore_pos = OFFSHORE_COORDS["彦根沖"]
+            ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='green', scale=25)
+            ax.text(fore_pos["lon"], fore_pos["lat"] - 0.012, f"{latest_fore.get('src')}({latest_fore.get('target_time')})\n{latest_fore.get('speed')}", 
                     color='green', fontweight='bold', ha='center', fontsize=10)
         
         # ④ PH離陸方位 (黒)
@@ -271,7 +189,7 @@ with tab1:
         ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
         st.pyplot(fig)
-        st.caption("※青=AMeDAS / 赤=現地報告 / 緑=SCW / 紫=MSM背景場 / 黒=離陸方位")
+        st.caption("※青=AMeDAS / 赤=現地報告 / 緑=手入力予報(SCW/MSM) / 黒=離陸方位")
 
     with col_r:
         st.subheader("横風判定")
@@ -294,10 +212,11 @@ with tab1:
 # --- タブ3: 予報入力 ---
 with tab3:
     st.subheader("🖊️ 予報値入力 (SCW / LFM / MSM)")
+    st.info("※負荷対策のため、MSM等の予報データは担当者が目視確認して手入力する運用です。")
     with st.form("fore_form"):
         c1, c2, c3 = st.columns(3)
         with c1: 
-            src = st.selectbox("種別", ["SCW", "MSM(手入力)", "LFM"])
+            src = st.selectbox("種別", ["SCW", "MSM", "LFM"])
             issue_time = st.time_input("予報発表時刻 (更新時刻)")
             target_time = st.selectbox("対象時刻", [f"{h:02d}:{m:02d}" for h in range(4, 20) for m in [0, 30]])
         with c2:
