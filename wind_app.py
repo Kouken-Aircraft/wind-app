@@ -8,8 +8,9 @@ import math
 
 # 🌟【最重要】サーバークラッシュを根絶するバックエンド強制設定
 import matplotlib
-matplotlib.use('Agg') # 画面(GUI)を探しに行ってクラッシュするのを防ぐ
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe # 🌟 文字を白ふちどりして見やすくするライブラリ
 
 # ==========================================
 # ⚙️ 設定・パス・時刻 (日本時間 JST を強制)
@@ -126,7 +127,7 @@ def fetch_amedas():
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.113 (Agg Backend)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.114 (High Visibility)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -151,58 +152,63 @@ with tab1:
     
     with col_l:
         st.subheader("琵琶湖 統合風況マップ")
-        # グラフ描画
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.set_facecolor('#E3F2FD')
         ax.set_title("Lake Biwa Wind Map (m/s)", fontsize=16)
 
-        # ① AMeDAS実況 (青)
+        # 🌟 文字を白ふちどりして浮き立たせる共通設定
+        txt_effect = [pe.withStroke(linewidth=3, foreground="white")]
+
+        # ① AMeDAS実況 (青) - zorder=3
         if amedas and "stations" in amedas:
             for sid, s in amedas["stations"].items():
                 pos = STATIONS.get(sid)
                 if pos:
                     u, v = s.get("u", 0.0), s.get("v", 0.0)
-                    ax.quiver(pos["lon"], pos["lat"], u, v, color='blue', scale=25)
-                    ax.text(pos["lon"], pos["lat"]-0.012, f"{pos['name']}\n{s.get('speed', 0)}", 
-                            ha='center', fontsize=10, fontweight='bold')
+                    ax.quiver(pos["lon"], pos["lat"], u, v, color='blue', scale=25, zorder=3)
+                    ax.text(pos["lon"], pos["lat"]-0.015, f"{pos['name']}\n{s.get('speed', 0)}", 
+                            ha='center', fontsize=10, fontweight='bold', color='blue',
+                            path_effects=txt_effect, zorder=10)
         
-        # ② 実測報告 (赤)
-        if reps:
-            lr = reps[-1]
-            raw_loc = lr.get("loc", "会場(PH)")
-            safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
-            rep_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["会場(PH)"])
-            
-            ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25)
-            ax.text(rep_pos["lon"], rep_pos["lat"]-0.012, f"REPORT({safe_loc_en})\n{lr.get('speed')}", 
-                    color='red', fontweight='bold', ha='center', fontsize=10)
-
-        # ③ SCW/MSM予報 (緑)
+        # ② SCW/MSM予報 (緑) - zorder=4
         if forecasts:
             latest_fore = forecasts[-1]
             raw_loc = latest_fore.get("loc_name", "彦根沖")
             safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
             fore_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["彦根沖"])
             
-            ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='green', scale=25)
-            ax.text(fore_pos["lon"], fore_pos["lat"] - 0.012, f"{latest_fore.get('src')}({latest_fore.get('target_time')})\n{latest_fore.get('speed')}", 
-                    color='green', fontweight='bold', ha='center', fontsize=10)
-        
-        # ④ PH離陸方位 (黒)
+            ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='green', scale=25, zorder=4)
+            ax.text(fore_pos["lon"], fore_pos["lat"] - 0.015, f"{latest_fore.get('src')}({latest_fore.get('target_time')})\n{latest_fore.get('speed')}", 
+                    color='green', fontweight='bold', ha='center', fontsize=10,
+                    path_effects=txt_effect, zorder=10)
+
+        # ③ PH離陸方位 (黒) - zorder=5
         ph_lon, ph_lat = OFFSHORE_COORDS["会場(PH)"]["lon"], OFFSHORE_COORDS["会場(PH)"]["lat"]
         r_rad = math.radians(runway_heading)
         ru, rv = 0.04 * math.sin(r_rad), 0.04 * math.cos(r_rad)
-        ax.quiver(ph_lon, ph_lat, ru, rv, color='black', scale=1, scale_units='xy', angles='xy', width=0.006, headwidth=4)
-        ax.text(ph_lon + ru, ph_lat + rv, "PH Launch", color='black', fontsize=9, fontweight='bold')
+        ax.quiver(ph_lon, ph_lat, ru, rv, color='black', scale=1, scale_units='xy', angles='xy', width=0.005, headwidth=4, zorder=5)
+        ax.text(ph_lon + ru, ph_lat + rv + 0.005, "PH Launch", color='black', fontsize=9, fontweight='bold',
+                path_effects=txt_effect, zorder=10)
+
+        # ④ 実測報告 (赤) - 最優先 zorder=6 (文字はzorder=11)
+        if reps:
+            lr = reps[-1]
+            raw_loc = lr.get("loc", "会場(PH)")
+            safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
+            rep_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["会場(PH)"])
+            
+            ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25, zorder=6)
+            ax.text(rep_pos["lon"], rep_pos["lat"] + 0.012, f"REPORT({safe_loc_en})\n{lr.get('speed')}", 
+                    color='red', fontweight='bold', ha='center', fontsize=10,
+                    path_effects=txt_effect, zorder=11)
         
         ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
         
-        # Streamlitに出力して、メモリから直ちに解放
         st.pyplot(fig)
-        plt.close(fig)
+        plt.close(fig) # メモリリーク防止
         
-        st.caption("※青=AMeDAS実況 / 赤=現地報告 / 緑=手入力予報 / 黒=離陸方位")
+        st.caption("※Blue=AMeDAS / Red=Report / Green=Forecast / Black=Launch Dir")
 
     with col_r:
         st.subheader("横風判定")
