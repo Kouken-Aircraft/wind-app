@@ -5,6 +5,10 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 import math
+
+# 🌟【最重要】サーバークラッシュを根絶するバックエンド強制設定
+import matplotlib
+matplotlib.use('Agg') # 画面(GUI)を探しに行ってクラッシュするのを防ぐ
 import matplotlib.pyplot as plt
 
 # ==========================================
@@ -39,7 +43,7 @@ OFFSHORE_COORDS = {
     "任意地点": {"lat": 35.27, "lon": 136.22}
 }
 
-# 🌟 文字化け防止フィルター (古い日本語データを英語に強制変換)
+# 文字化け防止フィルター (古い日本語データを英語に強制変換)
 EN_MAP = {
     "会場(PH)": "Platform", "船A(北)": "Boat-A", "船B(南)": "Boat-B", "任意地点": "Custom",
     "彦根沖": "Hikone-Off", "長浜沖": "Nagahama-Off", "今津沖": "Imazu-Off", "南小松沖": "M-Komatsu-Off"
@@ -122,7 +126,7 @@ def fetch_amedas():
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.112 (OOM Fixed)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.113 (Agg Backend)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -147,10 +151,9 @@ with tab1:
     
     with col_l:
         st.subheader("琵琶湖 統合風況マップ")
+        # グラフ描画
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.set_facecolor('#E3F2FD')
-        
-        # グラフ内部は完全に英語化して文字化けを排除
         ax.set_title("Lake Biwa Wind Map (m/s)", fontsize=16)
 
         # ① AMeDAS実況 (青)
@@ -167,7 +170,7 @@ with tab1:
         if reps:
             lr = reps[-1]
             raw_loc = lr.get("loc", "会場(PH)")
-            safe_loc_en = EN_MAP.get(raw_loc, "Unknown") # 日本語を英語に変換
+            safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
             rep_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["会場(PH)"])
             
             ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25)
@@ -178,7 +181,7 @@ with tab1:
         if forecasts:
             latest_fore = forecasts[-1]
             raw_loc = latest_fore.get("loc_name", "彦根沖")
-            safe_loc_en = EN_MAP.get(raw_loc, "Unknown") # 日本語を英語に変換
+            safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
             fore_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["彦根沖"])
             
             ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='green', scale=25)
@@ -195,11 +198,11 @@ with tab1:
         ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
         
-        # Streamlitに画像として渡し、直後にメモリから完全に削除（クラッシュ対策）
+        # Streamlitに出力して、メモリから直ちに解放
         st.pyplot(fig)
-        plt.close(fig) # 🌟 ここが超重要！メモリリークを防ぎ、サーバークラッシュを根絶します。
+        plt.close(fig)
         
-        st.caption("※青=AMeDAS実況 / 赤=現地報告 / 緑=手入力予報(SCW/MSM) / 黒=離陸方位")
+        st.caption("※青=AMeDAS実況 / 赤=現地報告 / 緑=手入力予報 / 黒=離陸方位")
 
     with col_r:
         st.subheader("横風判定")
@@ -260,7 +263,6 @@ with tab4:
             obs_t = st.time_input("観測時刻 (自動入力/修正可)", value=datetime.now(JST).time())
         with c2:
             st.write("平均風向 (時)")
-            # 1から12時まですべて対応する2段組みボタン
             btn_cols1 = st.columns(6)
             btn_cols2 = st.columns(6)
             for i, h in enumerate(range(1, 13)):
