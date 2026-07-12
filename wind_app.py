@@ -8,12 +8,6 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 
-# 🌟【重要】Matplotlibの日本語化ライブラリ
-try:
-    import japanize_matplotlib
-except ImportError:
-    pass
-
 # ==========================================
 # ⚙️ 設定・パス
 # ==========================================
@@ -32,16 +26,16 @@ STATIONS = {
     "60191": {"name": "M-Komatsu", "lat": 35.2400, "lon": 135.9633}
 }
 
-# 予報(SCW/MSM)・実測のマップ描画用ダミー座標
+# 🌟 文字化け防止のため、座標キーをすべて英語化
 OFFSHORE_COORDS = {
-    "彦根沖": {"lat": 35.28, "lon": 136.20},
-    "長浜沖": {"lat": 35.35, "lon": 136.22},
-    "今津沖": {"lat": 35.38, "lon": 136.08},
-    "南小松沖": {"lat": 35.25, "lon": 136.00},
-    "会場(PH)": {"lat": 35.2750, "lon": 136.2467},
-    "船A(北)": {"lat": 35.35, "lon": 136.18},
-    "船B(南)": {"lat": 35.20, "lon": 136.18},
-    "任意地点": {"lat": 35.27, "lon": 136.22}
+    "Hikone-Off": {"lat": 35.28, "lon": 136.20},
+    "Nagahama-Off": {"lat": 35.35, "lon": 136.22},
+    "Imazu-Off": {"lat": 35.38, "lon": 136.08},
+    "M-Komatsu-Off": {"lat": 35.25, "lon": 136.00},
+    "Platform": {"lat": 35.2750, "lon": 136.2467},
+    "Boat-A": {"lat": 35.35, "lon": 136.18},
+    "Boat-B": {"lat": 35.20, "lon": 136.18},
+    "Custom": {"lat": 35.27, "lon": 136.22}
 }
 
 # ==========================================
@@ -121,7 +115,7 @@ def fetch_amedas():
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.109 (Stable Core)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.110 (Anti-Mojibake)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -130,7 +124,6 @@ with st.sidebar:
     launch_limit = st.number_input("横風限界 (m/s)", value=3.0, step=0.1)
     st.write("---")
     
-    # ⚠️ メモリ負荷の高いMSM取得ボタンを削除し、AMeDASのみに集約
     if st.button("📡 AMeDAS実況を更新", use_container_width=True):
         if fetch_amedas(): st.success("AMeDAS Update Success")
         else: st.error("Fetch Failed")
@@ -164,23 +157,23 @@ with tab1:
         # ② 実測報告 (赤)
         if reps:
             lr = reps[-1]
-            rep_pos = OFFSHORE_COORDS.get(lr.get("loc", "会場(PH)"))
-            if rep_pos is None: rep_pos = OFFSHORE_COORDS["会場(PH)"]
+            rep_pos = OFFSHORE_COORDS.get(lr.get("loc", "Platform"))
+            if rep_pos is None: rep_pos = OFFSHORE_COORDS["Platform"]
             ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25)
             ax.text(rep_pos["lon"], rep_pos["lat"]-0.012, f"REPORT({lr.get('loc')})\n{lr.get('speed')}", 
                     color='red', fontweight='bold', ha='center', fontsize=10)
 
-        # ③ SCW/MSM予報 (緑) - 手入力された最新データを表示
+        # ③ SCW/MSM予報 (緑)
         if forecasts:
             latest_fore = forecasts[-1]
-            fore_pos = OFFSHORE_COORDS.get(latest_fore.get("loc_name", "彦根沖"))
-            if fore_pos is None: fore_pos = OFFSHORE_COORDS["彦根沖"]
+            fore_pos = OFFSHORE_COORDS.get(latest_fore.get("loc_name", "Hikone-Off"))
+            if fore_pos is None: fore_pos = OFFSHORE_COORDS["Hikone-Off"]
             ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='green', scale=25)
             ax.text(fore_pos["lon"], fore_pos["lat"] - 0.012, f"{latest_fore.get('src')}({latest_fore.get('target_time')})\n{latest_fore.get('speed')}", 
                     color='green', fontweight='bold', ha='center', fontsize=10)
         
         # ④ PH離陸方位 (黒)
-        ph_lon, ph_lat = OFFSHORE_COORDS["会場(PH)"]["lon"], OFFSHORE_COORDS["会場(PH)"]["lat"]
+        ph_lon, ph_lat = OFFSHORE_COORDS["Platform"]["lon"], OFFSHORE_COORDS["Platform"]["lat"]
         r_rad = math.radians(runway_heading)
         ru, rv = 0.04 * math.sin(r_rad), 0.04 * math.cos(r_rad)
         ax.quiver(ph_lon, ph_lat, ru, rv, color='black', scale=1, scale_units='xy', angles='xy', width=0.006, headwidth=4)
@@ -189,7 +182,7 @@ with tab1:
         ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
         st.pyplot(fig)
-        st.caption("※青=AMeDAS / 赤=現地報告 / 緑=手入力予報(SCW/MSM) / 黒=離陸方位")
+        st.caption("※Blue=AMeDAS / Red=Report / Green=Forecast / Black=Launch Dir")
 
     with col_r:
         st.subheader("横風判定")
@@ -220,7 +213,8 @@ with tab3:
             issue_time = st.time_input("予報発表時刻 (更新時刻)")
             target_time = st.selectbox("対象時刻", [f"{h:02d}:{m:02d}" for h in range(4, 20) for m in [0, 30]])
         with c2:
-            loc_name = st.selectbox("地点", ["彦根沖", "長浜沖", "今津沖", "南小松沖"])
+            # 🌟 グラフ描画用に英語名を使用
+            loc_name = st.selectbox("地点", ["Hikone-Off", "Nagahama-Off", "Imazu-Off", "M-Komatsu-Off"])
             clock = st.selectbox("風向(時)", range(1, 13), index=11)
             spd = st.number_input("風速(m/s)", step=0.1)
         with c3:
@@ -247,7 +241,8 @@ with tab4:
     with st.container():
         c1, c2, c3 = st.columns(3)
         with c1: 
-            loc = st.selectbox("地点ID", ["会場(PH)", "船A(北)", "船B(南)", "任意地点"])
+            # 🌟 グラフ描画用に英語名を使用
+            loc = st.selectbox("地点ID", ["Platform", "Boat-A", "Boat-B", "Custom"])
             obs_t = st.time_input("観測時刻 (自動入力/修正可)")
         with c2:
             st.write("平均風向 (時)")
