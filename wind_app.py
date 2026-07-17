@@ -131,9 +131,10 @@ def fetch_amedas():
 @st.cache_data(show_spinner=False)
 def get_satellite_map():
     try:
-        z = 10
-        x_range = range(898, 901)
-        y_range = range(403, 406)
+        # 🌟 彦根市周辺を高解像度(z=12)で取得
+        z = 12
+        x_range = range(3596, 3600) # 経度 136.11 〜 136.38
+        y_range = range(1618, 1623) # 緯度 35.17 〜 35.37
         merged = Image.new('RGB', (256 * len(x_range), 256 * len(y_range)))
         
         for i, x in enumerate(x_range):
@@ -163,7 +164,7 @@ def get_satellite_map():
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.115 (Satellite & Stable)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.116 (Zoom to Hikone)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -187,18 +188,18 @@ with tab1:
     col_l, col_r = st.columns([2, 1])
     
     with col_l:
-        st.subheader("琵琶湖 統合風況マップ")
+        st.subheader("彦根・プラットフォーム周辺マップ")
         fig, ax = plt.subplots(figsize=(8, 6))
         
-        # 🌟 国土地理院の衛星写真を背景に配置
+        # 国土地理院の衛星写真を背景に配置
         bg_img, bg_ext = get_satellite_map()
         if bg_img is not None:
             ax.imshow(bg_img, extent=bg_ext, aspect='auto', alpha=0.9)
         else:
-            ax.set_facecolor('#263238') # 画像取得失敗時は暗い色に
+            ax.set_facecolor('#263238')
             
-        ax.set_title("Lake Biwa Wind Map (m/s)", fontsize=16)
-        txt_effect = [pe.withStroke(linewidth=3, foreground="black")] # 文字は黒ふちどり
+        ax.set_title("Hikone Area Wind Map (m/s)", fontsize=16)
+        txt_effect = [pe.withStroke(linewidth=3, foreground="black")]
 
         # ① AMeDAS実況 (水色: Cyan)
         if amedas and "stations" in amedas:
@@ -206,9 +207,9 @@ with tab1:
                 pos = STATIONS.get(sid)
                 if pos:
                     u, v = s.get("u", 0.0), s.get("v", 0.0)
-                    ax.quiver(pos["lon"], pos["lat"], u, v, color='cyan', scale=25, zorder=3, width=0.005)
-                    ax.text(pos["lon"], pos["lat"]-0.015, f"{pos['name']}\n{s.get('speed', 0)}", 
-                            ha='center', fontsize=10, fontweight='bold', color='cyan',
+                    ax.quiver(pos["lon"], pos["lat"], u, v, color='cyan', scale=18, zorder=3, width=0.005)
+                    ax.text(pos["lon"], pos["lat"]-0.006, f"{pos['name']}\n{s.get('speed', 0)}", 
+                            ha='center', fontsize=11, fontweight='bold', color='cyan',
                             path_effects=txt_effect, zorder=10)
         
         # ② SCW/MSM予報 (黄緑: Lime)
@@ -218,17 +219,17 @@ with tab1:
             safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
             fore_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["彦根沖"])
             
-            ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='lime', scale=25, zorder=4, width=0.005)
-            ax.text(fore_pos["lon"], fore_pos["lat"] - 0.015, f"{latest_fore.get('src')}({latest_fore.get('target_time')})\n{latest_fore.get('speed')}", 
-                    color='lime', fontweight='bold', ha='center', fontsize=10,
+            ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='lime', scale=18, zorder=4, width=0.005)
+            ax.text(fore_pos["lon"], fore_pos["lat"] - 0.006, f"{latest_fore.get('src')}({latest_fore.get('target_time')})\n{latest_fore.get('speed')}", 
+                    color='lime', fontweight='bold', ha='center', fontsize=11,
                     path_effects=txt_effect, zorder=10)
 
         # ③ PH離陸方位 (白: White)
         ph_lon, ph_lat = OFFSHORE_COORDS["会場(PH)"]["lon"], OFFSHORE_COORDS["会場(PH)"]["lat"]
         r_rad = math.radians(runway_heading)
-        ru, rv = 0.04 * math.sin(r_rad), 0.04 * math.cos(r_rad)
-        ax.quiver(ph_lon, ph_lat, ru, rv, color='white', scale=1, scale_units='xy', angles='xy', width=0.005, headwidth=4, zorder=5)
-        ax.text(ph_lon + ru, ph_lat + rv + 0.005, "PH Launch", color='white', fontsize=9, fontweight='bold',
+        ru, rv = 0.015 * math.sin(r_rad), 0.015 * math.cos(r_rad)
+        ax.quiver(ph_lon, ph_lat, ru, rv, color='white', scale=1, scale_units='xy', angles='xy', width=0.007, headwidth=4, zorder=5)
+        ax.text(ph_lon + ru, ph_lat + rv + 0.002, "PH Launch", color='white', fontsize=10, fontweight='bold',
                 path_effects=txt_effect, zorder=10)
 
         # ④ 実測報告 (赤: Red)
@@ -238,17 +239,18 @@ with tab1:
             safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
             rep_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["会場(PH)"])
             
-            ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25, zorder=6, width=0.006)
-            ax.text(rep_pos["lon"], rep_pos["lat"] + 0.012, f"REPORT({safe_loc_en})\n{lr.get('speed')}", 
-                    color='#ff5555', fontweight='bold', ha='center', fontsize=10,
+            ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=18, zorder=6, width=0.007)
+            ax.text(rep_pos["lon"], rep_pos["lat"] + 0.005, f"REPORT({safe_loc_en})\n{lr.get('speed')}", 
+                    color='#ff5555', fontweight='bold', ha='center', fontsize=11,
                     path_effects=[pe.withStroke(linewidth=3, foreground="white")], zorder=11)
         
-        # 表示範囲の固定設定
-        ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
+        # 🌟 彦根市（プラットフォーム周辺）に大きくズーム
+        ax.set_xlim(136.15, 136.30)
+        ax.set_ylim(35.20, 35.35)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
         
         st.pyplot(fig)
-        plt.close(fig) # 🌟 メモリリーク防止機構
+        plt.close(fig) # メモリリーク防止
         
         st.caption("※Cyan=AMeDAS / Red=Report / Lime=Forecast / White=Launch Dir")
 
