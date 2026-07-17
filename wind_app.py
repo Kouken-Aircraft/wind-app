@@ -5,12 +5,15 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 import math
+import urllib.request
+import io
+from PIL import Image
 
 # 🌟【最重要】サーバークラッシュを根絶するバックエンド強制設定
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe # 🌟 文字を白ふちどりして見やすくするライブラリ
+import matplotlib.patheffects as pe
 
 # ==========================================
 # ⚙️ 設定・パス・時刻 (日本時間 JST を強制)
@@ -24,7 +27,7 @@ DB_FORECAST = os.path.join(BASE_DIR, "ops_forecast.json")
 DB_REPORT = os.path.join(BASE_DIR, "ops_report.json")
 DB_JUDGE = os.path.join(BASE_DIR, "ops_judge.json")
 
-# AMeDAS 観測地点 (英語統一)
+# AMeDAS 観測地点
 STATIONS = {
     "60131": {"name": "Hikone", "lat": 35.2750, "lon": 136.2467},
     "60026": {"name": "Nagahama", "lat": 35.3850, "lon": 136.2650},
@@ -32,7 +35,7 @@ STATIONS = {
     "60191": {"name": "M-Komatsu", "lat": 35.2400, "lon": 135.9633}
 }
 
-# 描画用座標 (UIの日本語と紐付け)
+# 描画用座標
 OFFSHORE_COORDS = {
     "彦根沖": {"lat": 35.28, "lon": 136.20},
     "長浜沖": {"lat": 35.35, "lon": 136.22},
@@ -44,7 +47,6 @@ OFFSHORE_COORDS = {
     "任意地点": {"lat": 35.27, "lon": 136.22}
 }
 
-# 文字化け防止フィルター (古い日本語データを英語に強制変換)
 EN_MAP = {
     "会場(PH)": "Platform", "船A(北)": "Boat-A", "船B(南)": "Boat-B", "任意地点": "Custom",
     "彦根沖": "Hikone-Off", "長浜沖": "Nagahama-Off", "今津沖": "Imazu-Off", "南小松沖": "M-Komatsu-Off"
@@ -124,10 +126,44 @@ def fetch_amedas():
     except: return False
 
 # ==========================================
+# 🗺️ 衛星写真ベースマップ取得 (国土地理院 API)
+# ==========================================
+@st.cache_data(show_spinner=False)
+def get_satellite_map():
+    try:
+        z = 10
+        x_range = range(898, 901)
+        y_range = range(403, 406)
+        merged = Image.new('RGB', (256 * len(x_range), 256 * len(y_range)))
+        
+        for i, x in enumerate(x_range):
+            for j, y in enumerate(y_range):
+                url = f"https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
+                try:
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=3) as resp:
+                        img = Image.open(io.BytesIO(resp.read()))
+                        merged.paste(img, (i * 256, j * 256))
+                except: pass
+                
+        def num2deg(xtile, ytile, zoom):
+            n = 2.0 ** zoom
+            lon_deg = xtile / n * 360.0 - 180.0
+            lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+            return math.degrees(lat_rad), lon_deg
+        
+        lat_top, lon_left = num2deg(x_range[0], y_range[0], z)
+        lat_bottom, lon_right = num2deg(x_range[-1]+1, y_range[-1]+1, z)
+        
+        return merged, [lon_left, lon_right, lat_bottom, lat_top]
+    except:
+        return None, None
+
+# ==========================================
 # 🚀 UI メイン
 # ==========================================
 st.set_page_config(page_title="Birdman Wind Ops", page_icon="🦅", layout="wide")
-st.markdown("# 🦅 Birdman Wind Ops <small>Ver.114 (High Visibility)</small>", unsafe_allow_html=True)
+st.markdown("# 🦅 Birdman Wind Ops <small>Ver.115 (Satellite & Stable)</small>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("🌐 全体設定")
@@ -153,62 +189,68 @@ with tab1:
     with col_l:
         st.subheader("琵琶湖 統合風況マップ")
         fig, ax = plt.subplots(figsize=(8, 6))
-        ax.set_facecolor('#E3F2FD')
+        
+        # 🌟 国土地理院の衛星写真を背景に配置
+        bg_img, bg_ext = get_satellite_map()
+        if bg_img is not None:
+            ax.imshow(bg_img, extent=bg_ext, aspect='auto', alpha=0.9)
+        else:
+            ax.set_facecolor('#263238') # 画像取得失敗時は暗い色に
+            
         ax.set_title("Lake Biwa Wind Map (m/s)", fontsize=16)
+        txt_effect = [pe.withStroke(linewidth=3, foreground="black")] # 文字は黒ふちどり
 
-        # 🌟 文字を白ふちどりして浮き立たせる共通設定
-        txt_effect = [pe.withStroke(linewidth=3, foreground="white")]
-
-        # ① AMeDAS実況 (青) - zorder=3
+        # ① AMeDAS実況 (水色: Cyan)
         if amedas and "stations" in amedas:
             for sid, s in amedas["stations"].items():
                 pos = STATIONS.get(sid)
                 if pos:
                     u, v = s.get("u", 0.0), s.get("v", 0.0)
-                    ax.quiver(pos["lon"], pos["lat"], u, v, color='blue', scale=25, zorder=3)
+                    ax.quiver(pos["lon"], pos["lat"], u, v, color='cyan', scale=25, zorder=3, width=0.005)
                     ax.text(pos["lon"], pos["lat"]-0.015, f"{pos['name']}\n{s.get('speed', 0)}", 
-                            ha='center', fontsize=10, fontweight='bold', color='blue',
+                            ha='center', fontsize=10, fontweight='bold', color='cyan',
                             path_effects=txt_effect, zorder=10)
         
-        # ② SCW/MSM予報 (緑) - zorder=4
+        # ② SCW/MSM予報 (黄緑: Lime)
         if forecasts:
             latest_fore = forecasts[-1]
             raw_loc = latest_fore.get("loc_name", "彦根沖")
             safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
             fore_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["彦根沖"])
             
-            ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='green', scale=25, zorder=4)
+            ax.quiver(fore_pos["lon"], fore_pos["lat"], latest_fore.get("u", 0.0), latest_fore.get("v", 0.0), color='lime', scale=25, zorder=4, width=0.005)
             ax.text(fore_pos["lon"], fore_pos["lat"] - 0.015, f"{latest_fore.get('src')}({latest_fore.get('target_time')})\n{latest_fore.get('speed')}", 
-                    color='green', fontweight='bold', ha='center', fontsize=10,
+                    color='lime', fontweight='bold', ha='center', fontsize=10,
                     path_effects=txt_effect, zorder=10)
 
-        # ③ PH離陸方位 (黒) - zorder=5
+        # ③ PH離陸方位 (白: White)
         ph_lon, ph_lat = OFFSHORE_COORDS["会場(PH)"]["lon"], OFFSHORE_COORDS["会場(PH)"]["lat"]
         r_rad = math.radians(runway_heading)
         ru, rv = 0.04 * math.sin(r_rad), 0.04 * math.cos(r_rad)
-        ax.quiver(ph_lon, ph_lat, ru, rv, color='black', scale=1, scale_units='xy', angles='xy', width=0.005, headwidth=4, zorder=5)
-        ax.text(ph_lon + ru, ph_lat + rv + 0.005, "PH Launch", color='black', fontsize=9, fontweight='bold',
+        ax.quiver(ph_lon, ph_lat, ru, rv, color='white', scale=1, scale_units='xy', angles='xy', width=0.005, headwidth=4, zorder=5)
+        ax.text(ph_lon + ru, ph_lat + rv + 0.005, "PH Launch", color='white', fontsize=9, fontweight='bold',
                 path_effects=txt_effect, zorder=10)
 
-        # ④ 実測報告 (赤) - 最優先 zorder=6 (文字はzorder=11)
+        # ④ 実測報告 (赤: Red)
         if reps:
             lr = reps[-1]
             raw_loc = lr.get("loc", "会場(PH)")
             safe_loc_en = EN_MAP.get(raw_loc, "Unknown")
             rep_pos = OFFSHORE_COORDS.get(raw_loc, OFFSHORE_COORDS["会場(PH)"])
             
-            ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25, zorder=6)
+            ax.quiver(rep_pos["lon"], rep_pos["lat"], lr.get("u", 0.0), lr.get("v", 0.0), color='red', scale=25, zorder=6, width=0.006)
             ax.text(rep_pos["lon"], rep_pos["lat"] + 0.012, f"REPORT({safe_loc_en})\n{lr.get('speed')}", 
-                    color='red', fontweight='bold', ha='center', fontsize=10,
-                    path_effects=txt_effect, zorder=11)
+                    color='#ff5555', fontweight='bold', ha='center', fontsize=10,
+                    path_effects=[pe.withStroke(linewidth=3, foreground="white")], zorder=11)
         
+        # 表示範囲の固定設定
         ax.set_xlim(135.8, 136.5); ax.set_ylim(35.0, 35.5)
         ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
         
         st.pyplot(fig)
-        plt.close(fig) # メモリリーク防止
+        plt.close(fig) # 🌟 メモリリーク防止機構
         
-        st.caption("※Blue=AMeDAS / Red=Report / Green=Forecast / Black=Launch Dir")
+        st.caption("※Cyan=AMeDAS / Red=Report / Lime=Forecast / White=Launch Dir")
 
     with col_r:
         st.subheader("横風判定")
